@@ -29,6 +29,8 @@ function int(v: unknown, fallback = 0): number {
 export interface EntityRow {
   id: number;
   variant: number;
+  /** Third discriminator — without it ids collide (laser 7.1 vs 7.1.3) */
+  subtype: number;
   name: string;
   /** gfx-relative, normalized to forward slashes */
   anm2Path: string;
@@ -53,6 +55,7 @@ export function parseEntities2(text: string): {
     rows.push({
       id: int(e.id, -1),
       variant: int(e.variant, 0),
+      subtype: int(e.subtype, 0),
       name: nameFromLocKey(str(e.name)) || anm2,
       anm2Path: anm2,
       boss: str(e.boss) === "1",

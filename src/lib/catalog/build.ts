@@ -87,7 +87,7 @@ export function buildCatalog(sources: CatalogSources): Catalog {
       }
       claimed.add(key);
       entries.push({
-        key: `entity:${row.id}.${row.variant}`,
+        key: `entity:${row.id}.${row.variant}.${row.subtype}`,
         name: row.name,
         category: cat.category,
         subcategory: cat.subcategory,

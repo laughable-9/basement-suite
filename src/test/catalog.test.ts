@@ -48,29 +48,33 @@ describe("buildCatalog (synthetic)", () => {
   const byKey = new Map(catalog.entries.map((e) => [e.key, e]));
 
   it("categorizes entities by type id and boss flag", () => {
-    expect(byKey.get("entity:10.0")).toMatchObject({
+    expect(byKey.get("entity:10.0.0")).toMatchObject({
       name: "Gaper",
       category: "enemies",
       subcategory: null,
     });
-    expect(byKey.get("entity:20.0")).toMatchObject({
+    expect(byKey.get("entity:20.0.0")).toMatchObject({
       category: "enemies",
       subcategory: "Bosses",
     });
-    expect(byKey.get("entity:3.22")).toMatchObject({ category: "familiars" });
-    expect(byKey.get("entity:2.0")).toMatchObject({
+    expect(byKey.get("entity:3.22.0")).toMatchObject({
+      category: "familiars",
+    });
+    expect(byKey.get("entity:2.0.0")).toMatchObject({
       category: "tears",
       subcategory: "Tears",
     });
-    expect(byKey.get("entity:1000.0")).toMatchObject({ category: "effects" });
+    expect(byKey.get("entity:1000.0.0")).toMatchObject({
+      category: "effects",
+    });
   });
 
   it("dedupes variants sharing one anm2", () => {
-    expect(byKey.has("entity:20.1")).toBe(false);
+    expect(byKey.has("entity:20.1.0")).toBe(false);
   });
 
   it("skips rows whose files are missing, with warnings", () => {
-    expect(byKey.has("entity:50.0")).toBe(false);
+    expect(byKey.has("entity:50.0.0")).toBe(false);
     expect(catalog.warnings.some((w) => w.includes("050.000_missing"))).toBe(
       true,
     );
@@ -135,6 +139,11 @@ describe.skipIf(!hasGameFixtures)("buildCatalog (real game data)", () => {
     catalog.entries.filter(
       (e) => e.category === cat && (sub === undefined || e.subcategory === sub),
     );
+
+  it("has globally unique entry keys (React list keys depend on it)", () => {
+    const keys = new Set(catalog.entries.map((e) => e.key));
+    expect(keys.size).toBe(catalog.entries.length);
+  });
 
   it("finds the expected category populations", () => {
     expect(by("enemies").length).toBeGreaterThan(400);
