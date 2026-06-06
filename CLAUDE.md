@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Basement Suite: a desktop app (Tauri 2 + React + TypeScript + Vite) combining a pixel art editor with a live `.anm2` animation previewer for modding The Binding of Isaac: Repentance. Edit a spritesheet in one pane, watch the animation re-render live in the other, save into a mod folder.
 
-**Current status: pre-scaffold.** Phase 0 (scan & plan) is complete; no app code exists yet. Read these before doing anything:
+**Current status: MVP complete (M0–M4).** Browser, anm2 parser+player, pixel editor (incl. floating paste), live link, and mod export are all working and verified in-game. Post-MVP work continues on the `dev` branch. Read these before doing anything:
 - `SCAN_REPORT.md` — empirical findings from scanning the game's 2,199 anm2 / 8,290 PNG files: real schema, attribute ranges, and a list of landmines in shipped game data (garbage FPS values, uint32-wrapped negative crops, missing `<Info>` elements, broken refs). Do not re-scan the game tree; the answers are here.
 - `PLAN.md` — approved architecture, repo structure, milestones M0–M4 with acceptance criteria, and the TypeScript data model for parsed anm2 files.
 

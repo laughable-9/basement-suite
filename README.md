@@ -2,17 +2,18 @@
 
 A desktop app for modding **The Binding of Isaac: Repentance** sprites: a pixel art editor and a live `.anm2` animation previewer, side by side. Edit a spritesheet in one pane and watch the in-game animation update in the other, then save straight into a mod folder.
 
-> **Status:** pre-alpha — scan & planning phase complete, app not yet scaffolded. See [`PLAN.md`](PLAN.md) for the roadmap and [`SCAN_REPORT.md`](SCAN_REPORT.md) for the reverse-engineered anm2 schema notes.
+> **Status:** MVP complete (M0–M4) — the full loop works: browse → play → edit → live preview → save to mod → verified in-game. See [`PLAN.md`](PLAN.md) for the roadmap and [`SCAN_REPORT.md`](SCAN_REPORT.md) for the reverse-engineered anm2 schema notes.
 
-## Planned features (v1)
+## Features (v1)
 
 - **Asset browser** — browse the game's extracted `gfx/` tree with PNG thumbnails and anm2 detection
-- **Animation player** — plays any animation from any anm2: layers, crops, pivots, scale, rotation, tints, per-frame delays, and interpolation, with play/pause/scrub
-- **Pixel editor** — zoomable canvas (8×–32×), pencil/eraser/eyedropper, palette, undo/redo, and a crop-grid overlay showing exactly which spritesheet region each animation frame uses
-- **Live link** — edits re-render in the animation pane immediately
-- **Mod export** — writes the edited PNG into the correct mirrored path under `mods/<name>/resources/gfx/...` and generates `metadata.xml`
+- **Animation player** — plays any animation from any anm2: layers, crops, pivots, scale, rotation, tints, per-frame delays, interpolation; play/pause/scrub, onion skin
+- **Pixel editor** — Photoshop-style tool rail, zoomable canvas (1×–32×), pencil/eraser/eyedropper/pan, brush sizing with `[` `]`, color + opacity + recent swatches + sheet palette extraction, undo/redo, and a labeled crop-grid overlay generated from the anm2 (click a rect to jump the player to that frame)
+- **Floating paste** — Ctrl+V any image, move/scale it, Enter stamps it pixelized into the sheet
+- **Live link** — edits re-render in the animation pane immediately, even mid-playback
+- **Mod export** — Ctrl+S writes the edited PNG into the mirrored path under `mods/<name>/resources/gfx/...` and generates `metadata.xml` on first save; session restores on relaunch
 
-Out of scope for v1: editing anm2 keyframes, creating animations, audio, room editing.
+Out of scope for v1 (future): editing anm2 keyframes, creating animations, full layer system, audio, room editing.
 
 ## Tech
 
