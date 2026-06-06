@@ -2,17 +2,43 @@ import { useEffect, useState } from "react";
 import { exists } from "@tauri-apps/plugin-fs";
 import { loadConfig, type ConfigState } from "./lib/fsx/config";
 import { loadCatalog } from "./lib/catalog/load";
-import { Tree } from "./features/browser/Tree";
-import { DetailPane } from "./features/browser/DetailPane";
-import { Editor } from "./features/editor/Editor";
-import { useAppStore, type EditingTarget } from "./app/store";
-import type { Entry } from "./lib/fsx/fs";
+import { AppShell } from "./features/shell/AppShell";
+import {
+  useAppStore,
+  type HomeLocation,
+  type WorkTab,
+} from "./app/store";
 
-const SESSION_KEY = "bs:session";
+const SESSION_KEY = "bs:session2";
 
 interface Session {
-  selected: Entry | null;
-  editing: EditingTarget | null;
+  tabs: WorkTab[];
+  activeTabId: string;
+  home: HomeLocation;
+}
+
+/** Restore last session's tabs/home, skipping tabs whose files vanished. */
+async function restoreSession(): Promise<void> {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw) as Session;
+    const tabs: WorkTab[] = [];
+    for (const tab of s.tabs ?? []) {
+      const path = tab.anm2Path ?? tab.sheetPath;
+      if (path && (await exists(path))) tabs.push(tab);
+    }
+    useAppStore.setState({
+      tabs,
+      activeTabId:
+        s.activeTabId === "home" || tabs.some((t) => t.id === s.activeTabId)
+          ? s.activeTabId
+          : "home",
+      home: s.home ?? { category: "characters", subcategory: null },
+    });
+  } catch {
+    // Corrupt/stale session data — start fresh.
+  }
 }
 
 function Toasts() {
@@ -41,31 +67,8 @@ function Toasts() {
   );
 }
 
-/** Restore last session's selection/editor, skipping anything now missing. */
-async function restoreSession(): Promise<void> {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return;
-    const s = JSON.parse(raw) as Session;
-    const store = useAppStore.getState();
-    if (s.selected && (await exists(s.selected.path))) {
-      store.select(s.selected);
-    }
-    if (
-      s.editing &&
-      (await exists(s.editing.sheetPath)) &&
-      (!s.editing.anm2Path || (await exists(s.editing.anm2Path)))
-    ) {
-      store.openEditor(s.editing.sheetPath, s.editing.anm2Path);
-    }
-  } catch {
-    // Corrupt/stale session data — start fresh.
-  }
-}
-
 export default function App() {
   const [cfg, setCfg] = useState<ConfigState | null>(null);
-  const editing = useAppStore((s) => s.editing);
 
   useEffect(() => {
     loadConfig().then(
@@ -90,14 +93,15 @@ export default function App() {
     );
   }, []);
 
-  // Persist selection/editor across launches.
+  // Persist tabs/home across launches.
   useEffect(() => {
     return useAppStore.subscribe((s) => {
       localStorage.setItem(
         SESSION_KEY,
         JSON.stringify({
-          selected: s.selected,
-          editing: s.editing,
+          tabs: s.tabs,
+          activeTabId: s.activeTabId,
+          home: s.home,
         } satisfies Session),
       );
     });
@@ -132,30 +136,9 @@ export default function App() {
   }
 
   return (
-    <div className="workbench">
-      <header className="topbar">
-        <strong>Basement Suite</strong>
-        <span className="topbar-path" title={cfg.gfxRoot}>
-          {cfg.gfxRoot}
-        </span>
-      </header>
+    <>
       <Toasts />
-      <main className={`panes${editing ? " with-editor" : ""}`}>
-        <aside className="pane pane-tree">
-          <Tree root={cfg.gfxRoot} />
-        </aside>
-        {editing && (
-          <section className="pane pane-editor">
-            <Editor
-              key={`${editing.sheetPath}|${editing.anm2Path}`}
-              target={editing}
-            />
-          </section>
-        )}
-        <section className="pane pane-detail">
-          <DetailPane />
-        </section>
-      </main>
-    </div>
+      <AppShell />
+    </>
   );
 }
