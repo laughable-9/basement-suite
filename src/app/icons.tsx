@@ -4,7 +4,7 @@ interface IconProps {
   size?: number;
 }
 
-function svg(path: React.ReactNode, { size = 16 }: IconProps = {}) {
+function svg(path: React.ReactNode, { size = 19 }: IconProps = {}) {
   return (
     <svg
       width={size}

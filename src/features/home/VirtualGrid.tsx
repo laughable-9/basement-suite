@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import type { CatalogEntry } from "../../lib/catalog/types";
 import { EntryCard } from "./EntryCard";
 
-const CARD_W = 132; // incl. gap
-const CARD_H = 158;
+const CARD_W = 168; // incl. gap
+const CARD_H = 200;
 const OVERSCAN_ROWS = 2;
 
 export function VirtualGrid({ entries }: { entries: CatalogEntry[] }) {
