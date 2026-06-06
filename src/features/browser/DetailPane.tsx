@@ -26,6 +26,7 @@ export function DetailPane() {
 }
 
 function PngDetail({ path, name }: { path: string; name: string }) {
+  const openEditor = useAppStore((s) => s.openEditor);
   const [url, setUrl] = useState<string | null>(null);
   const [dims, setDims] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +38,12 @@ function PngDetail({ path, name }: { path: string; name: string }) {
   if (error) return <div className="detail-error">{error}</div>;
   return (
     <>
-      <div className="detail-meta">{dims}</div>
+      <div className="detail-meta">
+        {dims}{" "}
+        <button className="edit-link" onClick={() => openEditor(path, null)}>
+          edit
+        </button>
+      </div>
       <div className="checkerboard">
         {url && (
           <img

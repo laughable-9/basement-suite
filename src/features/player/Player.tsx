@@ -4,6 +4,7 @@ import { normalizeTime } from "../../lib/anm2/timeline";
 import type { Anm2, Anm2Animation } from "../../lib/anm2/types";
 import { pngUrl, readText } from "../../lib/fsx/fs";
 import { dirname, resolveRelative } from "../../lib/fsx/resolve";
+import { useAppStore } from "../../app/store";
 import { renderFrame, type SheetMap } from "./render";
 
 const CANVAS_W = 640;
@@ -12,6 +13,8 @@ const CANVAS_H = 420;
 interface Loaded {
   anm2: Anm2;
   sheets: SheetMap;
+  /** id → resolved absolute path (editor entry point) */
+  sheetPaths: Map<number, string>;
   /** Spritesheets whose PNG failed to load (broken refs like raglich) */
   missing: string[];
 }
@@ -30,21 +33,26 @@ async function load(path: string): Promise<Loaded> {
   const anm2 = parseAnm2(await readText(path));
   const dir = dirname(path);
   const sheets: SheetMap = new Map();
+  const sheetPaths = new Map<number, string>();
   const missing: string[] = [];
   await Promise.all(
     anm2.content.spritesheets.map(async (s) => {
+      const resolved = resolveRelative(dir, s.rawPath);
+      sheetPaths.set(s.id, resolved);
       try {
-        sheets.set(s.id, await loadImage(resolveRelative(dir, s.rawPath)));
+        sheets.set(s.id, await loadImage(resolved));
       } catch {
         sheets.set(s.id, null);
         missing.push(s.rawPath);
       }
     }),
   );
-  return { anm2, sheets, missing };
+  return { anm2, sheets, sheetPaths, missing };
 }
 
 export function Player({ path }: { path: string }) {
+  const openEditor = useAppStore((s) => s.openEditor);
+  const playerJump = useAppStore((s) => s.playerJump);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [animName, setAnimName] = useState("");
@@ -79,6 +87,16 @@ export function Player({ path }: { path: string }) {
   const anim: Anm2Animation | undefined = loaded?.anm2.animations.find(
     (a) => a.name === animName,
   );
+
+  // Editor crop-grid click → jump to that animation/frame, paused.
+  useEffect(() => {
+    if (!playerJump || !loaded) return;
+    if (!loaded.anm2.animations.some((a) => a.name === playerJump.animName))
+      return;
+    setAnimName(playerJump.animName);
+    setTick(playerJump.tick);
+    setPlaying(false);
+  }, [playerJump, loaded]);
 
   // Playback clock: advance the playhead by elapsed wall time × fps.
   useEffect(() => {
@@ -211,7 +229,19 @@ export function Player({ path }: { path: string }) {
       <h3>Spritesheets</h3>
       <ul className="sheet-list">
         {anm2.content.spritesheets.map((s) => (
-          <li key={s.id}>{s.rawPath}</li>
+          <li key={s.id}>
+            {s.rawPath}{" "}
+            {loaded.sheets.get(s.id) && (
+              <button
+                className="edit-link"
+                onClick={() =>
+                  openEditor(loaded.sheetPaths.get(s.id)!, path)
+                }
+              >
+                edit
+              </button>
+            )}
+          </li>
         ))}
       </ul>
     </div>
