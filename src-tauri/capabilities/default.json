@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "M0: read-only filesystem access. The game tree location is machine-local (bs.config.json), so the scope is broad, but NO write permission is granted anywhere — writes arrive in M3 and will be scoped to modsPath.",
+  "description": "Reads anywhere (game tree location is machine-local via bs.config.json). Writes are granted here but every write call goes through lib/fsx/modWrite.ts, which throws unless the target is under modsPath — the game directory stays read-only by construction in app code.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -11,6 +11,9 @@
     "fs:allow-read-dir",
     "fs:allow-exists",
     "fs:allow-stat",
+    "fs:allow-write-file",
+    "fs:allow-write-text-file",
+    "fs:allow-mkdir",
     {
       "identifier": "fs:scope",
       "allow": [{ "path": "**" }]
