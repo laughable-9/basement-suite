@@ -21,7 +21,7 @@ interface Loaded {
   missing: string[];
 }
 
-async function load(path: string): Promise<Loaded> {
+async function load(path: string, skinPath?: string): Promise<Loaded> {
   const anm2 = parseAnm2(await readText(path));
   const dir = dirname(path);
   const sheets: SheetMap = new Map();
@@ -29,7 +29,10 @@ async function load(path: string): Promise<Loaded> {
   const missing: string[] = [];
   await Promise.all(
     anm2.content.spritesheets.map(async (s) => {
-      const resolved = resolveRelative(dir, s.rawPath);
+      // Character tabs substitute their skin for the player anm2's sheet 0
+      // (all character sheets share the same layout).
+      const resolved =
+        skinPath && s.id === 0 ? skinPath : resolveRelative(dir, s.rawPath);
       sheetPaths.set(s.id, resolved);
       try {
         // Shared sheet documents: the editor mutates these same canvases,
@@ -44,7 +47,14 @@ async function load(path: string): Promise<Loaded> {
   return { anm2, sheets, sheetPaths, missing };
 }
 
-export function Player({ path }: { path: string }) {
+export function Player({
+  path,
+  skinPath,
+}: {
+  path: string;
+  /** Character skin override (replaces spritesheet 0 + composites the head) */
+  skinPath?: string;
+}) {
   const openEditor = useAppStore((s) => s.openEditor);
   const playerJump = useAppStore((s) => s.playerJump);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -71,7 +81,7 @@ export function Player({ path }: { path: string }) {
     let cancelled = false;
     setLoaded(null);
     setError(null);
-    load(path).then(
+    load(path, skinPath).then(
       (l) => {
         if (cancelled) return;
         setLoaded(l);
@@ -88,11 +98,21 @@ export function Player({ path }: { path: string }) {
     return () => {
       cancelled = true;
     };
-  }, [path]);
+  }, [path, skinPath]);
 
   const anim: Anm2Animation | undefined = loaded?.anm2.animations.find(
     (a) => a.name === animName,
   );
+
+  // Character context: the engine composites body + head animations; do the
+  // same for Walk* so characters aren't headless (SCAN quirk: HeadDown is a
+  // separate 4-frame animation, not a layer of WalkDown).
+  const headAnim: Anm2Animation | undefined =
+    skinPath && anim?.name.startsWith("Walk")
+      ? loaded?.anm2.animations.find(
+          (a) => a.name === anim.name.replace(/^Walk/, "Head"),
+        )
+      : undefined;
 
   // Editor crop-grid click → jump to that animation/frame, paused.
   // Each jump seq is consumed once so a stale jump in the store can't re-fire
@@ -161,8 +181,17 @@ export function Player({ path }: { path: string }) {
         }
       }
       renderFrame(ctx, loaded.anm2, anim, tick, loaded.sheets);
+      if (headAnim && headAnim.frameNum > 0) {
+        renderFrame(
+          ctx,
+          loaded.anm2,
+          headAnim,
+          tick % headAnim.frameNum,
+          loaded.sheets,
+        );
+      }
     }
-  }, [loaded, anim, tick, zoom, sheetRev, onion]);
+  }, [loaded, anim, headAnim, tick, zoom, sheetRev, onion]);
 
   const selectAnim = useCallback((name: string) => {
     setAnimName(name);

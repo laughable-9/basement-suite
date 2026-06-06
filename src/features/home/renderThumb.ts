@@ -15,6 +15,12 @@ import { renderFrame, type SheetMap } from "../player/render";
 export interface ThumbScene {
   anm2: Anm2;
   anim: Anm2Animation;
+  /**
+   * The player anm2 keeps head and body as SEPARATE animations that the game
+   * engine composites (WalkDown = body only, HeadDown = head). Character
+   * scenes carry the head animation so cards/icons show a whole person.
+   */
+  headAnim: Anm2Animation | null;
   sheets: SheetMap;
   fps: number;
   /** Sheet doc paths involved (live-link redraw hooks) */
@@ -52,8 +58,15 @@ async function load(tab: WorkTab): Promise<ThumbScene | null> {
       anm2.animations[0];
     if (!anim || anim.frameNum <= 0) return null;
 
+    // Characters (skin override present): pair the body anim with its head.
+    const headAnim = tab.sheetPath
+      ? (anm2.animations.find(
+          (a) => a.name === anim.name.replace(/^Walk/, "Head"),
+        ) ?? null)
+      : null;
+
     if (!frameBounds(anim, 0)) return null; // fully invisible first frame
-    return { anm2, anim, sheets, fps: anm2.info.fps, sheetPaths };
+    return { anm2, anim, headAnim, sheets, fps: anm2.info.fps, sheetPaths };
   } catch {
     return null;
   }
@@ -68,11 +81,29 @@ export function thumbScene(tab: WorkTab): Promise<ThumbScene | null> {
   return p;
 }
 
-/** Draw the scene at tick t, auto-fit and centered. */
+function union(
+  a: ReturnType<typeof frameBounds>,
+  b: ReturnType<typeof frameBounds>,
+) {
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    minX: Math.min(a.minX, b.minX),
+    minY: Math.min(a.minY, b.minY),
+    maxX: Math.max(a.maxX, b.maxX),
+    maxY: Math.max(a.maxY, b.maxY),
+  };
+}
+
+/**
+ * Draw the scene at tick t, auto-fit and centered. The camera is locked to
+ * `fitTick` (default frame 0) so hover playback doesn't jitter.
+ */
 export function drawThumb(
   canvas: HTMLCanvasElement,
   scene: ThumbScene,
   t: number,
+  fitTick = 0,
 ): void {
   const ctx = canvas.getContext("2d")!;
   const { width: w, height: h } = canvas;
@@ -80,8 +111,10 @@ export function drawThumb(
   ctx.clearRect(0, 0, w, h);
   ctx.imageSmoothingEnabled = false;
 
-  // Fit is locked to frame 0 so hover playback doesn't jitter the camera.
-  const bounds = frameBounds(scene.anim, 0);
+  const bounds = union(
+    frameBounds(scene.anim, fitTick),
+    scene.headAnim && frameBounds(scene.headAnim, 0),
+  );
   if (!bounds) return;
   const bw = Math.max(1, bounds.maxX - bounds.minX);
   const bh = Math.max(1, bounds.maxY - bounds.minY);
@@ -92,4 +125,13 @@ export function drawThumb(
   ctx.translate(w / 2 - cx * scale, h / 2 - cy * scale);
   ctx.scale(scale, scale);
   renderFrame(ctx, scene.anm2, scene.anim, t, scene.sheets);
+  if (scene.headAnim) {
+    renderFrame(
+      ctx,
+      scene.anm2,
+      scene.headAnim,
+      t % Math.max(1, scene.headAnim.frameNum),
+      scene.sheets,
+    );
+  }
 }

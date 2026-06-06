@@ -22,12 +22,18 @@ export async function applyIsaacBranding(
     if (!scene) return null;
 
     const happy = scene.anm2.animations.find((a) => a.name === "Happy");
-    const branded = happy ? { ...scene, anim: happy } : scene;
+    // Happy is body+arm only — composite the head like the engine does.
+    const head =
+      scene.anm2.animations.find((a) => a.name === "HeadDown") ?? null;
+    const branded = happy
+      ? { ...scene, anim: happy, headAnim: head }
+      : scene;
     const canvas = document.createElement("canvas");
     canvas.width = ICON_SIZE;
     canvas.height = ICON_SIZE;
-    // Mid-animation is where the thumb is fully up.
-    drawThumb(canvas, branded, Math.floor(branded.anim.frameNum / 2));
+    // Mid-animation is where the thumb is fully up; fit at that same tick.
+    const tick = Math.floor(branded.anim.frameNum / 2);
+    drawThumb(canvas, branded, tick, tick);
 
     try {
       const rgba = canvas

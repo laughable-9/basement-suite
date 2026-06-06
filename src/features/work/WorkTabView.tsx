@@ -21,7 +21,7 @@ export function WorkTabView({ tab }: { tab: WorkTab }) {
             </button>
           </div>
         )}
-        <Player path={tab.anm2Path} />
+        <Player path={tab.anm2Path} skinPath={tab.sheetPath ?? undefined} />
       </div>
     );
   }
