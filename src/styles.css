@@ -214,6 +214,88 @@ body {
   max-width: 100%;
 }
 
+.player-canvas-wrap {
+  display: inline-block;
+  line-height: 0;
+}
+
+.player-canvas-wrap canvas {
+  display: block;
+}
+
+.player-warning {
+  background: #4a2440;
+  border: 1px solid #a040a0;
+  border-radius: 4px;
+  padding: 6px 10px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #e8b8e8;
+}
+
+.player-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 16px;
+  max-width: 640px;
+}
+
+.player-controls input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.player-btn {
+  width: 36px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-raised);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.player-btn:hover {
+  background: var(--bg-hover);
+}
+
+.player-frame {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--text-dim);
+  min-width: 56px;
+}
+
+.player-zoom {
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.player-zoom select {
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.anim-row,
+.anim-row-active {
+  cursor: pointer;
+}
+
+.anim-row:hover td {
+  background: var(--bg-hover);
+}
+
+.anim-row-active td {
+  background: var(--bg-raised);
+  color: var(--accent);
+}
+
 .anim-table {
   border-collapse: collapse;
   min-width: 320px;
