@@ -1,3 +1,6 @@
 bs.config.json
 node_modules
 assets-cache/
+dist/
+src-tauri/target/
+src-tauri/gen/
