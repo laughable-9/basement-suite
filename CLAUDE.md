@@ -26,6 +26,9 @@ Basement Suite: a desktop app (Tauri 2 + React + TypeScript + Vite) combining a 
 
 ## Commands
 
-No build tooling exists yet. Once M0 scaffolding lands (npm + Tauri 2 + Vite + vitest), record the real commands here: dev (`npm run tauri dev`), test (`npx vitest`), single test (`npx vitest run <file>`), build (`npm run tauri build`).
+- `npm run tauri dev` — desktop window with Vite HMR (the user usually keeps this running in their own terminal; requires Rust + MSVC build tools)
+- `npm run dev` — Vite only; the UI loads in a browser but all fs calls fail (no Tauri bridge). Not useful beyond CSS tinkering.
+- `npm test` — vitest, single run; `npx vitest run src/test/<file>.test.ts` for one file
+- `npm run build` — tsc type-check + Vite bundle (no Rust needed); `npm run tauri build` for the full installer
 
 Corpus-dependent test suites skip when `extractedResourcesPath` is unavailable (e.g. CI); pure-logic tests must run everywhere.
