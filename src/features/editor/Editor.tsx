@@ -12,6 +12,7 @@ import { useAppStore, type EditingTarget } from "../../app/store";
 import { cropGrid, type CropRect } from "./cropGrid";
 import { canRedo, canUndo, redo, undo } from "./history";
 import { commitFloating, makeFloating, type Floating } from "./floating";
+import { extractPalette } from "./palette";
 import { SaveToModDialog } from "../export/SaveToModDialog";
 import { EditorCanvas, type Tool } from "./EditorCanvas";
 import {
@@ -60,6 +61,7 @@ const TOOLS: { id: Tool; icon: () => React.ReactNode; tip: string }[] = [
 export function Editor({ target }: { target: EditingTarget }) {
   const closeEditor = useAppStore((s) => s.closeEditor);
   const requestPlayerJump = useAppStore((s) => s.requestPlayerJump);
+  const addToast = useAppStore((s) => s.addToast);
 
   const [doc, setDoc] = useState<SheetDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -68,6 +70,7 @@ export function Editor({ target }: { target: EditingTarget }) {
   const [brushSize, setBrushSize] = useState(1);
   const [color, setColor] = useState<Rgba>({ r: 255, g: 255, b: 255, a: 255 });
   const [recent, setRecent] = useState<Rgba[]>([]);
+  const [palette, setPalette] = useState<Rgba[] | null>(null);
   const [showGrid, setShowGrid] = useState(true);
   const [zoom, setZoom] = useState(8);
   const [floating, setFloating] = useState<Floating | null>(null);
@@ -317,6 +320,32 @@ export function Editor({ target }: { target: EditingTarget }) {
                     </button>
                   ))}
                 </span>
+                <span className="opt-sep" />
+                <button
+                  className="edit-link"
+                  title="Most-used colors in this sheet"
+                  onClick={() => setPalette(extractPalette(doc))}
+                >
+                  sheet palette
+                </button>
+                {palette && (
+                  <span className="recent-colors">
+                    {palette.map((c) => (
+                      <button
+                        key={rgbaKey(c)}
+                        className="recent-color checkerboard"
+                        title={`rgba(${rgbaKey(c)})`}
+                        onClick={() => setColor(c)}
+                      >
+                        <span
+                          style={{
+                            background: `rgba(${c.r},${c.g},${c.b},${c.a / 255})`,
+                          }}
+                        />
+                      </button>
+                    ))}
+                  </span>
+                )}
               </>
             )}
           </>
@@ -414,6 +443,7 @@ export function Editor({ target }: { target: EditingTarget }) {
           onSaved={(p) => {
             setSaveOpen(false);
             setSavedPath(p);
+            addToast(`Saved → ${p}`, "success");
           }}
         />
       )}
