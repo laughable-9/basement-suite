@@ -1,5 +1,10 @@
-import { useEffect, useState } from "react";
-import { useAppStore, type RailCategory } from "../../app/store";
+import { useCallback, useEffect, useState } from "react";
+import {
+  useAppStore,
+  type RailCategory,
+  type WorkTab,
+} from "../../app/store";
+import { peekSheetDoc, subscribeSheet } from "../../lib/sheets/store";
 import { applyIsaacBranding } from "./isaacBranding";
 import {
   BoxIcon,
@@ -19,9 +24,22 @@ import {
   WindowIcon,
 } from "../../app/icons";
 import { CATEGORY_LABELS } from "../../lib/catalog/types";
-import { Editor } from "../editor/Editor";
 import { Home } from "../home/Home";
 import { WorkTabView } from "../work/WorkTabView";
+
+/** Amber dot on tabs whose editing sheet has unsaved changes. */
+function TabDirtyDot({ tab }: { tab: WorkTab }) {
+  const [, setRev] = useState(0);
+  const sheetPath = tab.editing?.sheetPath;
+
+  useEffect(() => {
+    if (!sheetPath) return;
+    return subscribeSheet(sheetPath, () => setRev((r) => r + 1));
+  }, [sheetPath]);
+
+  if (!sheetPath || !peekSheetDoc(sheetPath)?.dirty) return null;
+  return <span className="dirty-dot" title="Unsaved edits" />;
+}
 
 const RAIL: { id: RailCategory; icon: () => React.ReactNode; label: string }[] =
   [
@@ -43,12 +61,23 @@ export function AppShell() {
   const tabs = useAppStore((s) => s.tabs);
   const activeTabId = useAppStore((s) => s.activeTabId);
   const setActiveTab = useAppStore((s) => s.setActiveTab);
-  const closeTab = useAppStore((s) => s.closeTab);
+  const closeTabRaw = useAppStore((s) => s.closeTab);
+
+  // Closing a tab with unsaved sheet edits asks first.
+  const closeTab = useCallback(
+    (tab: WorkTab) => {
+      const doc = tab.editing && peekSheetDoc(tab.editing.sheetPath);
+      if (doc?.dirty && !confirm(`"${tab.title}" has unsaved edits. Close anyway?`)) {
+        return;
+      }
+      closeTabRaw(tab.id);
+    },
+    [closeTabRaw],
+  );
   const home = useAppStore((s) => s.home);
   const setHome = useAppStore((s) => s.setHome);
   const query = useAppStore((s) => s.searchQuery);
   const setSearchQuery = useAppStore((s) => s.setSearchQuery);
-  const editing = useAppStore((s) => s.editing);
   const catalog = useAppStore((s) => s.catalog);
   const playbackSpeed = useAppStore((s) => s.playbackSpeed);
   const setPlaybackSpeed = useAppStore((s) => s.setPlaybackSpeed);
@@ -74,7 +103,7 @@ export function AppShell() {
         setActiveTab(next);
       } else if (e.ctrlKey && e.key.toLowerCase() === "w" && activeTab) {
         e.preventDefault();
-        closeTab(activeTab.id);
+        closeTab(activeTab);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -104,16 +133,17 @@ export function AppShell() {
               key={t.id}
               className={`doc-tab doc-tab-entity${t.id === activeTabId ? " active" : ""}`}
               onAuxClick={(e) => {
-                if (e.button === 1) closeTab(t.id);
+                if (e.button === 1) closeTab(t);
               }}
             >
               <button className="doc-tab-label" onClick={() => setActiveTab(t.id)}>
                 {t.title}
               </button>
+              <TabDirtyDot tab={t} />
               <button
                 className="doc-tab-close"
                 title="Close (Ctrl+W)"
-                onClick={() => closeTab(t.id)}
+                onClick={() => closeTab(t)}
               >
                 <CloseIcon />
               </button>
@@ -149,17 +179,16 @@ export function AppShell() {
           ))}
         </aside>
 
-        {editing && (
-          <section className="pane pane-editor">
-            <Editor
-              key={`${editing.sheetPath}|${editing.anm2Path}`}
-              target={editing}
-            />
-          </section>
-        )}
-
         <main className="shell-content">
-          {activeTab ? <WorkTabView key={activeTab.id} tab={activeTab} /> : <Home />}
+          {/* All tabs stay mounted so editor/player state survives switches */}
+          <div className="tab-host" hidden={activeTabId !== "home"}>
+            <Home />
+          </div>
+          {tabs.map((t) => (
+            <div key={t.id} className="tab-host" hidden={t.id !== activeTabId}>
+              <WorkTabView tab={t} active={t.id === activeTabId} />
+            </div>
+          ))}
         </main>
       </div>
 

@@ -14,6 +14,8 @@ export interface EditingTarget {
 }
 
 export interface PlayerJump {
+  /** Which tab's player should jump (multiple players stay mounted) */
+  tabId: string;
   animName: string;
   tick: number;
   /** Monotonic, so repeating the same jump still triggers the effect */
@@ -35,6 +37,8 @@ export interface WorkTab {
   sheetPath: string | null;
   /** Character costume overlay anm2 (hair/wings), absolute */
   costumeAnm2Path?: string | null;
+  /** Editor open inside this tab, if any (per-tab editing state, U4) */
+  editing?: EditingTarget | null;
 }
 
 /** "files" is the raw-tree escape hatch, not a catalog category */
@@ -67,12 +71,10 @@ interface AppState {
   searchQuery: string;
   setSearchQuery: (q: string) => void;
 
-  /* ---- editor (single instance until U4) ---- */
-  editing: EditingTarget | null;
-  openEditor: (sheetPath: string, anm2Path: string | null) => void;
-  closeEditor: () => void;
+  /** Open/close the editor inside a tab (null target closes it) */
+  setTabEditing: (tabId: string, editing: EditingTarget | null) => void;
   playerJump: PlayerJump | null;
-  requestPlayerJump: (animName: string, tick: number) => void;
+  requestPlayerJump: (tabId: string, animName: string, tick: number) => void;
 
   toasts: Toast[];
   addToast: (text: string, kind: Toast["kind"]) => void;
@@ -122,14 +124,14 @@ export const useAppStore = create<AppState>((set) => ({
   searchQuery: "",
   setSearchQuery: (searchQuery) => set({ searchQuery, activeTabId: "home" }),
 
-  editing: null,
-  openEditor: (sheetPath, anm2Path) =>
-    set({ editing: { sheetPath, anm2Path } }),
-  closeEditor: () => set({ editing: null }),
-  playerJump: null,
-  requestPlayerJump: (animName, tick) =>
+  setTabEditing: (tabId, editing) =>
     set((s) => ({
-      playerJump: { animName, tick, seq: (s.playerJump?.seq ?? 0) + 1 },
+      tabs: s.tabs.map((t) => (t.id === tabId ? { ...t, editing } : t)),
+    })),
+  playerJump: null,
+  requestPlayerJump: (tabId, animName, tick) =>
+    set((s) => ({
+      playerJump: { tabId, animName, tick, seq: (s.playerJump?.seq ?? 0) + 1 },
     })),
 
   toasts: [],

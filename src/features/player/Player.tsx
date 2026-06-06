@@ -58,14 +58,20 @@ export function Player({
   path,
   skinPath,
   costumePath,
+  tabId,
+  active = true,
 }: {
   path: string;
   /** Character skin override (replaces spritesheet 0 + composites the head) */
   skinPath?: string;
   /** Character costume anm2 (hair/wings), composited by state name */
   costumePath?: string;
+  /** Owning tab — jump requests from the editor are scoped to it */
+  tabId?: string;
+  /** Hidden tabs stay mounted but pause their playback clock */
+  active?: boolean;
 }) {
-  const openEditor = useAppStore((s) => s.openEditor);
+  const setTabEditing = useAppStore((s) => s.setTabEditing);
   const playerJump = useAppStore((s) => s.playerJump);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +132,7 @@ export function Player({
   const consumedJumpRef = useRef(0);
   useEffect(() => {
     if (!playerJump || !loaded) return;
+    if (tabId !== undefined && playerJump.tabId !== tabId) return;
     if (playerJump.seq === consumedJumpRef.current) return;
     consumedJumpRef.current = playerJump.seq;
     if (!loaded.anm2.animations.some((a) => a.name === playerJump.animName))
@@ -138,8 +145,9 @@ export function Player({
   const playbackSpeed = useAppStore((s) => s.playbackSpeed);
 
   // Playback clock: advance the playhead by elapsed wall time × fps × speed.
+  // Paused while the owning tab is hidden (stays mounted for state).
   useEffect(() => {
-    if (!playing || !loaded || !anim || anim.frameNum <= 0) return;
+    if (!active || !playing || !loaded || !anim || anim.frameNum <= 0) return;
     let raf = 0;
     let last = performance.now();
     const step = (now: number) => {
@@ -158,7 +166,7 @@ export function Player({
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [playing, loaded, anim, playbackSpeed]);
+  }, [active, playing, loaded, anim, playbackSpeed]);
 
   // Repaint on every playhead/zoom/animation change.
   useEffect(() => {
@@ -312,11 +320,14 @@ export function Player({
         {anm2.content.spritesheets.map((s) => (
           <li key={s.id}>
             {s.rawPath}{" "}
-            {loaded.sheets.get(s.id) && (
+            {loaded.sheets.get(s.id) && tabId !== undefined && (
               <button
                 className="edit-link"
                 onClick={() =>
-                  openEditor(loaded.sheetPaths.get(s.id)!, path)
+                  setTabEditing(tabId, {
+                    sheetPath: loaded.sheetPaths.get(s.id)!,
+                    anm2Path: path,
+                  })
                 }
               >
                 edit

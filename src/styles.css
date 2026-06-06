@@ -211,9 +211,33 @@ body {
 .shell-content {
   flex: 1;
   min-width: 0;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+
+.tab-host {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+.tab-host[hidden] {
+  display: none;
+}
+
+.worktab {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+.worktab-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
 }
 
 .statusbar {

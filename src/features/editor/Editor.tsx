@@ -58,8 +58,16 @@ const TOOLS: { id: Tool; icon: () => React.ReactNode; tip: string }[] = [
   { id: "inspect", icon: CursorIcon, tip: "Inspect — click a frame rect to jump the player (V)" },
 ];
 
-export function Editor({ target }: { target: EditingTarget }) {
-  const closeEditor = useAppStore((s) => s.closeEditor);
+interface EditorProps {
+  target: EditingTarget;
+  /** Owning tab — player jumps stay inside it */
+  tabId: string;
+  /** Keyboard shortcuts only respond in the visible tab */
+  active: boolean;
+  onClose: () => void;
+}
+
+export function Editor({ target, tabId, active, onClose }: EditorProps) {
   const requestPlayerJump = useAppStore((s) => s.requestPlayerJump);
   const addToast = useAppStore((s) => s.addToast);
 
@@ -131,8 +139,8 @@ export function Editor({ target }: { target: EditingTarget }) {
   }, []);
 
   const onJump = useCallback(
-    (r: CropRect) => requestPlayerJump(r.animName, r.atTick),
-    [requestPlayerJump],
+    (r: CropRect) => requestPlayerJump(tabId, r.animName, r.atTick),
+    [requestPlayerJump, tabId],
   );
 
   const stampFloating = useCallback(() => {
@@ -147,7 +155,9 @@ export function Editor({ target }: { target: EditingTarget }) {
   }, [floating]);
 
   // Ctrl+V: paste an image as a floating object (committed on Enter).
+  // Active-gated so a paste lands only in the visible tab's editor.
   useEffect(() => {
+    if (!active) return;
     const onPaste = async (e: ClipboardEvent) => {
       if (!doc) return;
       const item = [...(e.clipboardData?.items ?? [])].find((i) =>
@@ -163,10 +173,11 @@ export function Editor({ target }: { target: EditingTarget }) {
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [doc, floating]);
+  }, [doc, floating, active]);
 
-  // Keyboard shortcuts.
+  // Keyboard shortcuts (only while this tab is visible).
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
       if (!doc) return;
@@ -204,7 +215,7 @@ export function Editor({ target }: { target: EditingTarget }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doc, floating, stampFloating, cancelFloating]);
+  }, [doc, floating, stampFloating, cancelFloating, active]);
 
   const fileName = useMemo(
     () => target.sheetPath.split(/[\\/]/).pop() ?? target.sheetPath,
@@ -243,7 +254,7 @@ export function Editor({ target }: { target: EditingTarget }) {
         </button>
         <button
           className="rail-btn"
-          onClick={closeEditor}
+          onClick={onClose}
           title="Close editor"
         >
           <CloseIcon />
