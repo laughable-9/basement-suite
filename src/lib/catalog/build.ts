@@ -172,9 +172,13 @@ export function buildCatalog(sources: CatalogSources): Catalog {
         warnings.push(`players: missing skin on disk: ${sheetPath}`);
         continue;
       }
+      // Tainted variants are marked by a "b" on the sprite number:
+      // Character_008_Azazel vs Character_008b_Azazel.
+      const tainted = /_\d+b_/i.test(row.skin);
+      const baseName = prettifyGfxName(row.skin);
       entries.push({
         key: `player:${row.id}`,
-        name: prettifyGfxName(row.skin),
+        name: tainted ? `Tainted ${baseName}` : baseName,
         category: "characters",
         subcategory: null,
         anm2Path: "001.000_player.anm2",

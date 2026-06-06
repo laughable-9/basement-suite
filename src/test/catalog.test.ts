@@ -27,6 +27,7 @@ describe("buildCatalog (synthetic)", () => {
       <player id="0" name="#ISAAC" skin="Character_001_Isaac.png"/>
       <player id="7" name="#AZAZEL" skin="Character_008_Azazel.png" costume="11"/>
       <player id="20" name="#ESAU" skin="Character_003x_Esau.png" skinColor="3"/>
+      <player id="28" name="#AZAZEL" skin="Character_008b_Azazel.png"/>
       <player id="99" name="#TAINTED" skin="Character_001_Isaac.png"/>
     </players>`,
     costumes2Xml: `<costumes anm2root="gfx/characters/">
@@ -46,6 +47,7 @@ describe("buildCatalog (synthetic)", () => {
       "characters/Character_008_AzazelHead.anm2",
       "characters/costumes/Character_003x_Esau.png",
       "characters/costumes/Character_003x_Esau_red.png",
+      "characters/costumes/Character_008b_Azazel.png",
       "ui/main menu/titlemenu.png",
       "ui/hudpickups.anm2",
       "ui/hudpickups.png",
@@ -118,6 +120,11 @@ describe("buildCatalog (synthetic)", () => {
       name: "Azazel",
       costumeAnm2Path: "characters/Character_008_AzazelHead.anm2",
     });
+  });
+
+  it('prefixes tainted variants with "Tainted"', () => {
+    expect(byKey.get("player:28")?.name).toBe("Tainted Azazel");
+    expect(byKey.get("player:7")?.name).toBe("Azazel");
   });
 
   it("applies skinColor recolor variants (Esau red)", () => {
@@ -196,6 +203,14 @@ describe.skipIf(!hasGameFixtures)("buildCatalog (real game data)", () => {
   it("gives Esau his red skin variant", () => {
     const esau = catalog.entries.find((e) => e.name === "Esau");
     expect(esau?.sheetPath?.toLowerCase()).toContain("esau_red");
+  });
+
+  it("names tainted characters distinctly", () => {
+    const tainted = catalog.entries.filter((e) =>
+      e.name.startsWith("Tainted "),
+    );
+    expect(tainted.length).toBeGreaterThan(10);
+    expect(tainted.some((e) => e.name === "Tainted Azazel")).toBe(true);
   });
 
   it('names "The Sad Onion" from its gfx filename', () => {
