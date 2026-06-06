@@ -92,6 +92,7 @@ function addOffset(a: Rgb, b: Rgb): Rgb {
 /**
  * Draw animation state at tick t. The ctx must already be transformed so the
  * entity origin is at (0,0) and 1 unit = 1 sprite pixel (zoom applied outside).
+ * `opacity` scales every layer's alpha — used for onion-skin ghosts.
  */
 export function renderFrame(
   ctx: CanvasRenderingContext2D,
@@ -99,6 +100,7 @@ export function renderFrame(
   anim: Anm2Animation,
   t: number,
   sheets: SheetMap,
+  opacity = 1,
 ): void {
   const root = sampleTransformTrack(anim.rootFrames, t) ?? IDENTITY;
   if (!root.visible) return;
@@ -126,7 +128,7 @@ export function renderFrame(
 
     const tint = mulTint(root.tint, f.tint);
     const offset = addOffset(root.offset, f.offset);
-    ctx.globalAlpha = tint.a / 255;
+    ctx.globalAlpha = (tint.a / 255) * opacity;
     if (layer?.blendMode === "additive") {
       ctx.globalCompositeOperation = "lighter";
     }

@@ -52,6 +52,7 @@ export function Player({ path }: { path: string }) {
   const [animName, setAnimName] = useState("");
   const [playing, setPlaying] = useState(true);
   const [zoom, setZoom] = useState(4);
+  const [onion, setOnion] = useState(false);
   const [tick, setTick] = useState(0); // continuous playhead, in ticks
   // Bumped when the editor mutates a sheet, to repaint while paused.
   const [sheetRev, setSheetRev] = useState(0);
@@ -143,9 +144,25 @@ export function Player({ path }: { path: string }) {
     ctx.translate(CANVAS_W / 2, CANVAS_H * 0.62);
     ctx.scale(zoom, zoom);
     if (anim && anim.frameNum > 0) {
+      if (onion && anim.frameNum > 1) {
+        // Ghost the neighboring whole frames at low opacity.
+        const f = Math.floor(tick);
+        const wrap = (t: number) =>
+          anim.loop
+            ? ((t % anim.frameNum) + anim.frameNum) % anim.frameNum
+            : t;
+        const prev = wrap(f - 1);
+        const next = wrap(f + 1);
+        if (prev >= 0 && prev < anim.frameNum && prev !== f) {
+          renderFrame(ctx, loaded.anm2, anim, prev, loaded.sheets, 0.25);
+        }
+        if (next >= 0 && next < anim.frameNum && next !== f) {
+          renderFrame(ctx, loaded.anm2, anim, next, loaded.sheets, 0.25);
+        }
+      }
       renderFrame(ctx, loaded.anm2, anim, tick, loaded.sheets);
     }
-  }, [loaded, anim, tick, zoom, sheetRev]);
+  }, [loaded, anim, tick, zoom, sheetRev, onion]);
 
   const selectAnim = useCallback((name: string) => {
     setAnimName(name);
@@ -207,6 +224,14 @@ export function Player({ path }: { path: string }) {
               </option>
             ))}
           </select>
+        </label>
+        <label className="player-zoom" title="Ghost the previous/next frame">
+          <input
+            type="checkbox"
+            checked={onion}
+            onChange={(e) => setOnion(e.target.checked)}
+          />
+          onion
         </label>
         <span className="detail-meta">{anm2.info.fps} fps</span>
       </div>
