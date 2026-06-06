@@ -239,48 +239,174 @@ body {
   min-height: 0;
 }
 
-.editor-toolbar {
+/* Slim title bar: name · dirty dot · meta · close */
+.editor-topbar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 4px 8px 4px 12px;
   border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
+  background: var(--bg-raised);
   flex-shrink: 0;
+  min-height: 32px;
 }
 
 .editor-title {
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.dirty-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e8c060;
+  flex-shrink: 0;
 }
 
 .toolbar-spacer {
   flex: 1;
 }
 
-.dirty-badge {
+/* Contextual options bar (Photoshop options strip) */
+.editor-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 3px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  min-height: 30px;
   font-size: 11px;
-  color: #e8c060;
-  background: #3a3020;
+  color: var(--text-dim);
+}
+
+.opt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.opt select {
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 3px;
-  padding: 1px 6px;
+  font-size: 11px;
 }
 
-.tool-btn {
-  width: auto;
-  padding: 0 8px;
-  font-size: 12px;
+.opt input[type="color"] {
+  width: 28px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
 }
 
-.tool-btn.active {
+.opt input[type="range"] {
+  width: 90px;
+  accent-color: var(--accent);
+}
+
+.opt-num {
+  min-width: 34px;
+  font-variant-numeric: tabular-nums;
+}
+
+.opt-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
+
+.opt-hint {
+  font-style: italic;
+}
+
+.editor-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* Vertical tool rail, icon-only */
+.tool-rail {
+  width: 40px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  border-right: 1px solid var(--border);
+  background: var(--bg-raised);
+}
+
+.rail-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.rail-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.rail-btn.active {
   background: var(--accent);
-  border-color: var(--accent);
   color: #fff;
 }
 
-.color-swatch,
+.rail-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.rail-sep {
+  width: 22px;
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.rail-swatch {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+  overflow: hidden;
+  margin-bottom: 2px;
+}
+
+.rail-swatch span {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 .recent-color {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: 0;
@@ -289,7 +415,6 @@ body {
   display: inline-block;
 }
 
-.color-swatch span,
 .recent-color span {
   display: block;
   width: 100%;
@@ -302,9 +427,12 @@ body {
   flex-wrap: wrap;
 }
 
-.alpha-label input[type="range"] {
-  width: 90px;
-  accent-color: var(--accent);
+.editor-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 .editor-canvas-wrap {
@@ -321,10 +449,11 @@ body {
 
 .editor-hint {
   flex-shrink: 0;
-  padding: 4px 10px;
-  font-size: 11px;
+  padding: 3px 10px;
+  font-size: 10px;
   color: var(--text-dim);
   border-top: 1px solid var(--border);
+  background: var(--bg-raised);
 }
 
 .edit-link {
@@ -381,6 +510,8 @@ body {
   background: var(--bg-raised);
   color: var(--text);
   cursor: pointer;
+  display: grid;
+  place-items: center;
 }
 
 .player-btn:hover {

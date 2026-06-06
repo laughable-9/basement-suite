@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseAnm2 } from "../../lib/anm2/parse";
 import type { Rgba } from "../../lib/anm2/types";
 import { readText } from "../../lib/fsx/fs";
@@ -12,6 +12,16 @@ import { useAppStore, type EditingTarget } from "../../app/store";
 import { cropGrid, type CropRect } from "./cropGrid";
 import { canRedo, canUndo, redo, undo } from "./history";
 import { EditorCanvas, type Tool } from "./EditorCanvas";
+import {
+  CloseIcon,
+  CursorIcon,
+  DropperIcon,
+  EraserIcon,
+  GridIcon,
+  PencilIcon,
+  RedoIcon,
+  UndoIcon,
+} from "../../app/icons";
 
 const MAX_RECENT = 16;
 
@@ -33,6 +43,13 @@ function fromHex(hex: string, a: number): Rgba {
   };
 }
 
+const TOOLS: { id: Tool; icon: () => React.ReactNode; tip: string }[] = [
+  { id: "pencil", icon: PencilIcon, tip: "Pencil (B)" },
+  { id: "eraser", icon: EraserIcon, tip: "Eraser (E)" },
+  { id: "eyedropper", icon: DropperIcon, tip: "Eyedropper (I)" },
+  { id: "inspect", icon: CursorIcon, tip: "Inspect — click a frame rect to jump the player (V)" },
+];
+
 export function Editor({ target }: { target: EditingTarget }) {
   const closeEditor = useAppStore((s) => s.closeEditor);
   const requestPlayerJump = useAppStore((s) => s.requestPlayerJump);
@@ -48,6 +65,7 @@ export function Editor({ target }: { target: EditingTarget }) {
   const [zoom, setZoom] = useState(8);
   // Bumped on sheet mutations so undo/redo button state stays fresh.
   const [, setRev] = useState(0);
+  const colorInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,13 +112,10 @@ export function Editor({ target }: { target: EditingTarget }) {
     pushRecent(color);
   }, [color, pushRecent]);
 
-  const onPick = useCallback(
-    (c: Rgba) => {
-      setColor(c);
-      setTool("pencil");
-    },
-    [],
-  );
+  const onPick = useCallback((c: Rgba) => {
+    setColor(c);
+    setTool("pencil");
+  }, []);
 
   const onJump = useCallback(
     (r: CropRect) => requestPlayerJump(r.animName, r.atTick),
@@ -139,139 +154,171 @@ export function Editor({ target }: { target: EditingTarget }) {
   if (error) return <div className="detail-error">{error}</div>;
   if (!doc) return <div className="detail-empty">Loading sheet…</div>;
 
+  const showBrushOptions = tool === "pencil" || tool === "eraser";
+
   return (
     <div className="editor">
-      <div className="editor-toolbar">
-        <strong className="editor-title" title={target.sheetPath}>
+      <div className="editor-topbar">
+        <span className="editor-title" title={target.sheetPath}>
           {fileName}
-        </strong>
-        {doc.dirty && <span className="dirty-badge">unsaved · in-memory</span>}
+        </span>
+        {doc.dirty && (
+          <span className="dirty-dot" title="Unsaved — edits are in-memory only" />
+        )}
         <span className="toolbar-spacer" />
-        <button className="player-btn" onClick={closeEditor} title="Close editor">
-          ✕
+        <span className="editor-meta">
+          {doc.canvas.width}×{doc.canvas.height}px · {zoom}×
+        </span>
+        <button
+          className="rail-btn"
+          onClick={closeEditor}
+          title="Close editor"
+        >
+          <CloseIcon />
         </button>
       </div>
 
-      <div className="editor-toolbar">
-        {(
-          [
-            ["pencil", "✏ Pencil (B)"],
-            ["eraser", "▱ Eraser (E)"],
-            ["eyedropper", "💉 Pick (I)"],
-            ["inspect", "➤ Inspect (V)"],
-          ] as [Tool, string][]
-        ).map(([t, label]) => (
-          <button
-            key={t}
-            className={`player-btn tool-btn${tool === t ? " active" : ""}`}
-            onClick={() => setTool(t)}
-          >
-            {label}
-          </button>
-        ))}
-        <label className="player-zoom">
-          size
-          <select
-            value={brushSize}
-            onChange={(e) => setBrushSize(Number(e.target.value))}
-          >
-            {[1, 2, 4].map((s) => (
-              <option key={s} value={s}>
-                {s}px
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          className="player-btn"
-          disabled={!canUndo(doc)}
-          onClick={() => undo(doc)}
-          title="Undo (Ctrl+Z)"
-        >
-          ↶
-        </button>
-        <button
-          className="player-btn"
-          disabled={!canRedo(doc)}
-          onClick={() => redo(doc)}
-          title="Redo (Ctrl+Y)"
-        >
-          ↷
-        </button>
-        <label className="player-zoom">
-          <input
-            type="checkbox"
-            checked={showGrid}
-            onChange={(e) => setShowGrid(e.target.checked)}
-          />
-          grid ({rects.length})
-        </label>
-        <span className="detail-meta">
-          {doc.canvas.width}×{doc.canvas.height} · {zoom}×
-        </span>
+      <div className="editor-options">
+        {showBrushOptions && (
+          <>
+            <label className="opt">
+              Size
+              <select
+                value={brushSize}
+                onChange={(e) => setBrushSize(Number(e.target.value))}
+              >
+                {[1, 2, 4].map((s) => (
+                  <option key={s} value={s}>
+                    {s}px
+                  </option>
+                ))}
+              </select>
+            </label>
+            {tool === "pencil" && (
+              <>
+                <span className="opt-sep" />
+                <label className="opt">
+                  <input
+                    ref={colorInputRef}
+                    type="color"
+                    value={toHex(color)}
+                    onChange={(e) => setColor(fromHex(e.target.value, color.a))}
+                  />
+                </label>
+                <label className="opt">
+                  Opacity
+                  <input
+                    type="range"
+                    min={0}
+                    max={255}
+                    value={color.a}
+                    onChange={(e) =>
+                      setColor({ ...color, a: Number(e.target.value) })
+                    }
+                  />
+                  <span className="opt-num">
+                    {Math.round((color.a / 255) * 100)}%
+                  </span>
+                </label>
+                {recent.length > 0 && <span className="opt-sep" />}
+                <span className="recent-colors">
+                  {recent.map((c) => (
+                    <button
+                      key={rgbaKey(c)}
+                      className="recent-color checkerboard"
+                      title={`rgba(${rgbaKey(c)})`}
+                      onClick={() => setColor(c)}
+                    >
+                      <span
+                        style={{
+                          background: `rgba(${c.r},${c.g},${c.b},${c.a / 255})`,
+                        }}
+                      />
+                    </button>
+                  ))}
+                </span>
+              </>
+            )}
+          </>
+        )}
+        {tool === "eyedropper" && (
+          <span className="opt-hint">Click a pixel to sample its color (alpha included)</span>
+        )}
+        {tool === "inspect" && (
+          <span className="opt-hint">
+            Click a green frame rect to jump the player to that animation frame
+          </span>
+        )}
       </div>
 
-      <div className="editor-toolbar">
-        <span
-          className="color-swatch checkerboard"
-          title={`rgba(${rgbaKey(color)})`}
-        >
-          <span
-            style={{
-              background: `rgba(${color.r},${color.g},${color.b},${color.a / 255})`,
-            }}
-          />
-        </span>
-        <input
-          type="color"
-          value={toHex(color)}
-          onChange={(e) => setColor(fromHex(e.target.value, color.a))}
-        />
-        <label className="player-zoom alpha-label">
-          α
-          <input
-            type="range"
-            min={0}
-            max={255}
-            value={color.a}
-            onChange={(e) => setColor({ ...color, a: Number(e.target.value) })}
-          />
-          {color.a}
-        </label>
-        <span className="recent-colors">
-          {recent.map((c) => (
+      <div className="editor-body">
+        <div className="tool-rail">
+          {TOOLS.map((t) => (
             <button
-              key={rgbaKey(c)}
-              className="recent-color checkerboard"
-              title={`rgba(${rgbaKey(c)})`}
-              onClick={() => setColor(c)}
+              key={t.id}
+              className={`rail-btn${tool === t.id ? " active" : ""}`}
+              onClick={() => setTool(t.id)}
+              title={t.tip}
             >
-              <span
-                style={{
-                  background: `rgba(${c.r},${c.g},${c.b},${c.a / 255})`,
-                }}
-              />
+              <t.icon />
             </button>
           ))}
-        </span>
-      </div>
-
-      <EditorCanvas
-        doc={doc}
-        tool={tool}
-        brushSize={brushSize}
-        color={color}
-        onPick={onPick}
-        rects={rects}
-        showGrid={showGrid}
-        onJump={onJump}
-        onStrokeEnd={onStrokeEnd}
-        zoom={zoom}
-        onZoom={setZoom}
-      />
-      <div className="editor-hint">
-        wheel: zoom · space/middle-drag: pan · Alt+click or Inspect tool on a
-        grid rect: jump player to that frame
+          <span className="rail-sep" />
+          <button
+            className="rail-btn"
+            disabled={!canUndo(doc)}
+            onClick={() => undo(doc)}
+            title="Undo (Ctrl+Z)"
+          >
+            <UndoIcon />
+          </button>
+          <button
+            className="rail-btn"
+            disabled={!canRedo(doc)}
+            onClick={() => redo(doc)}
+            title="Redo (Ctrl+Y)"
+          >
+            <RedoIcon />
+          </button>
+          <span className="rail-sep" />
+          <button
+            className={`rail-btn${showGrid ? " active" : ""}`}
+            onClick={() => setShowGrid((s) => !s)}
+            title={`Frame grid — ${rects.length} rects (G)`}
+          >
+            <GridIcon />
+          </button>
+          <span className="toolbar-spacer" />
+          <button
+            className="rail-swatch checkerboard"
+            title={`Current color rgba(${rgbaKey(color)}) — click to change`}
+            onClick={() => colorInputRef.current?.click()}
+          >
+            <span
+              style={{
+                background: `rgba(${color.r},${color.g},${color.b},${color.a / 255})`,
+              }}
+            />
+          </button>
+        </div>
+        <div className="editor-main">
+          <EditorCanvas
+            doc={doc}
+            tool={tool}
+            brushSize={brushSize}
+            color={color}
+            onPick={onPick}
+            rects={rects}
+            showGrid={showGrid}
+            onJump={onJump}
+            onStrokeEnd={onStrokeEnd}
+            zoom={zoom}
+            onZoom={setZoom}
+          />
+          <div className="editor-hint">
+            wheel zoom · space / middle-drag pan · Alt+click rect jumps player
+          </div>
+        </div>
       </div>
     </div>
   );

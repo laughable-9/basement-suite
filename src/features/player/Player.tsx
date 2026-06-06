@@ -5,6 +5,7 @@ import type { Anm2, Anm2Animation } from "../../lib/anm2/types";
 import { pngUrl, readText } from "../../lib/fsx/fs";
 import { dirname, resolveRelative } from "../../lib/fsx/resolve";
 import { useAppStore } from "../../app/store";
+import { PauseIcon, PlayIcon } from "../../app/icons";
 import { renderFrame, type SheetMap } from "./render";
 
 const CANVAS_W = 640;
@@ -168,8 +169,9 @@ export function Player({ path }: { path: string }) {
             setPlaying(!playing);
           }}
           disabled={!anim || anim.frameNum <= 0}
+          title={playing ? "Pause" : "Play"}
         >
-          {playing ? "⏸" : "▶"}
+          {playing ? <PauseIcon /> : <PlayIcon />}
         </button>
         <input
           type="range"
