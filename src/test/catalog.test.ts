@@ -25,8 +25,13 @@ describe("buildCatalog (synthetic)", () => {
     </items>`,
     playersXml: `<players>
       <player id="0" name="#ISAAC" skin="Character_001_Isaac.png"/>
+      <player id="7" name="#AZAZEL" skin="Character_008_Azazel.png" costume="11"/>
       <player id="99" name="#TAINTED" skin="Character_001_Isaac.png"/>
     </players>`,
+    costumes2Xml: `<costumes anm2root="gfx/characters/">
+      <costume id="11" anm2path="Character_008_AzazelHead.anm2" type="none"/>
+      <costume id="11" anm2path="some_item_costume.anm2" type="passive"/>
+    </costumes>`,
     gfxFiles: [
       "010.001_gaper.anm2",
       "020.000_monstro.anm2",
@@ -36,6 +41,8 @@ describe("buildCatalog (synthetic)", () => {
       "items/collectibles/Collectibles_001_TheSadOnion.png",
       "items/trinkets/Trinket_005_PurpleHeart.png",
       "characters/costumes/Character_001_Isaac.png",
+      "characters/costumes/Character_008_Azazel.png",
+      "characters/Character_008_AzazelHead.anm2",
       "ui/main menu/titlemenu.png",
       "ui/hudpickups.anm2",
       "ui/hudpickups.png",
@@ -98,8 +105,16 @@ describe("buildCatalog (synthetic)", () => {
       name: "Isaac",
       category: "characters",
       anm2Path: "001.000_player.anm2",
+      costumeAnm2Path: null,
     });
     expect(byKey.has("player:99")).toBe(false);
+  });
+
+  it("resolves signature costumes (type=none only) for characters", () => {
+    expect(byKey.get("player:7")).toMatchObject({
+      name: "Azazel",
+      costumeAnm2Path: "characters/Character_008_AzazelHead.anm2",
+    });
   });
 
   it("classifies folder categories and skips pngs owned by an anm2", () => {
@@ -133,6 +148,7 @@ describe.skipIf(!hasGameFixtures)("buildCatalog (real game data)", () => {
     entities2Xml: readResourceText("entities2.xml"),
     itemsXml: readResourceText("items.xml"),
     playersXml: readResourceText("players.xml"),
+    costumes2Xml: readResourceText("costumes2.xml"),
     gfxFiles: listGfxRelative(),
   });
   const by = (cat: string, sub?: string | null) =>
@@ -160,6 +176,11 @@ describe.skipIf(!hasGameFixtures)("buildCatalog (real game data)", () => {
     const monstro = catalog.entries.find((e) => e.name === "Monstro");
     expect(monstro?.category).toBe("enemies");
     expect(monstro?.subcategory).toBe("Bosses");
+  });
+
+  it("gives Azazel his wings costume from costumes2.xml", () => {
+    const azazel = catalog.entries.find((e) => e.name === "Azazel");
+    expect(azazel?.costumeAnm2Path?.toLowerCase()).toContain("azazelhead");
   });
 
   it('names "The Sad Onion" from its gfx filename', () => {

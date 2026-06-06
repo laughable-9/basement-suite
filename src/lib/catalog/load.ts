@@ -35,11 +35,19 @@ async function walkGfx(root: string, prefix = ""): Promise<string[]> {
 
 export async function loadCatalog(gfxRoot: string): Promise<Catalog> {
   const resourcesRoot = dirname(gfxRoot);
-  const [entities2Xml, itemsXml, playersXml, gfxFiles] = await Promise.all([
-    tryReadText(`${resourcesRoot}/entities2.xml`),
-    tryReadText(`${resourcesRoot}/items.xml`),
-    tryReadText(`${resourcesRoot}/players.xml`),
-    walkGfx(gfxRoot),
-  ]);
-  return buildCatalog({ entities2Xml, itemsXml, playersXml, gfxFiles });
+  const [entities2Xml, itemsXml, playersXml, costumes2Xml, gfxFiles] =
+    await Promise.all([
+      tryReadText(`${resourcesRoot}/entities2.xml`),
+      tryReadText(`${resourcesRoot}/items.xml`),
+      tryReadText(`${resourcesRoot}/players.xml`),
+      tryReadText(`${resourcesRoot}/costumes2.xml`),
+      walkGfx(gfxRoot),
+    ]);
+  return buildCatalog({
+    entities2Xml,
+    itemsXml,
+    playersXml,
+    costumes2Xml,
+    gfxFiles,
+  });
 }

@@ -33,6 +33,8 @@ export interface WorkTab {
   title: string;
   anm2Path: string | null;
   sheetPath: string | null;
+  /** Character costume overlay anm2 (hair/wings), absolute */
+  costumeAnm2Path?: string | null;
 }
 
 /** "files" is the raw-tree escape hatch, not a catalog category */
@@ -133,5 +135,8 @@ export function tabFromEntry(entry: CatalogEntry, gfxRoot: string): WorkTab {
     title: entry.name,
     anm2Path: entry.anm2Path ? `${gfxRoot}/${entry.anm2Path}` : null,
     sheetPath: entry.sheetPath ? `${gfxRoot}/${entry.sheetPath}` : null,
+    costumeAnm2Path: entry.costumeAnm2Path
+      ? `${gfxRoot}/${entry.costumeAnm2Path}`
+      : null,
   };
 }

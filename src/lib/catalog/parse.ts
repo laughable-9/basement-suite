@@ -10,9 +10,15 @@ const xml = new XMLParser({
   parseAttributeValue: false,
   parseTagValue: false,
   isArray: (name) =>
-    ["entity", "passive", "active", "familiar", "trinket", "player"].includes(
-      name,
-    ),
+    [
+      "entity",
+      "passive",
+      "active",
+      "familiar",
+      "trinket",
+      "player",
+      "costume",
+    ].includes(name),
 });
 
 type Raw = Record<string, unknown>;
@@ -100,6 +106,8 @@ export interface PlayerRow {
   id: number;
   /** skin filename, e.g. "Character_001_Isaac.png" */
   skin: string;
+  /** costumes2.xml id for the signature costume (hair/wings); 0 = none */
+  costume: number;
 }
 
 export function parsePlayers(text: string): {
@@ -116,7 +124,39 @@ export function parsePlayers(text: string): {
       warnings.push(`players: id=${str(p.id)} has no skin`);
       continue;
     }
-    rows.push({ id: int(p.id, -1), skin });
+    rows.push({ id: int(p.id, -1), skin, costume: int(p.costume, 0) });
   }
   return { rows, warnings };
+}
+
+export interface CostumeRow {
+  id: number;
+  /** anm2 filename, relative to the file's anm2root attribute */
+  anm2Path: string;
+}
+
+/**
+ * Player signature costumes only (type="none") — item costumes reuse the
+ * same ids under other types.
+ */
+export function parseCostumes2(text: string): {
+  anm2Root: string;
+  rows: CostumeRow[];
+  warnings: string[];
+} {
+  const warnings: string[] = [];
+  const rows: CostumeRow[] = [];
+  const doc = xml.parse(text) as Raw;
+  const costumes = (doc.costumes as Raw) ?? {};
+  const anm2Root = str(costumes.anm2root) || "gfx/characters/";
+  for (const c of (costumes.costume as Raw[]) ?? []) {
+    if (str(c.type) !== "none") continue;
+    const anm2Path = str(c.anm2path).replace(/\\/g, "/");
+    if (!anm2Path) {
+      warnings.push(`costumes2: id=${str(c.id)} has no anm2path`);
+      continue;
+    }
+    rows.push({ id: int(c.id, -1), anm2Path });
+  }
+  return { anm2Root, rows, warnings };
 }

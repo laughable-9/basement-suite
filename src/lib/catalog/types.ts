@@ -55,6 +55,8 @@ export interface CatalogEntry {
   anm2Path: string | null;
   /** gfx-relative png path for png-only entries (character skins, plain UI art) */
   sheetPath: string | null;
+  /** Character costume anm2 (hair/wings/fez — costumes2.xml), composited on top */
+  costumeAnm2Path: string | null;
   source: "entities2" | "items" | "players" | "files";
 }
 

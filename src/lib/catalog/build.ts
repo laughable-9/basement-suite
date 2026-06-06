@@ -1,9 +1,10 @@
-// Assembles the catalog from parsed XML rows + a flat listing of gfx files.
+﻿// Assembles the catalog from parsed XML rows + a flat listing of gfx files.
 // Pure: callers supply XML text and the file list (app walks via Tauri,
 // tests walk via node fs).
 
 import { prettifyGfxName } from "./names";
 import {
+  parseCostumes2,
   parseEntities2,
   parseItems,
   parsePlayers,
@@ -16,6 +17,7 @@ export interface CatalogSources {
   entities2Xml?: string;
   itemsXml?: string;
   playersXml?: string;
+  costumes2Xml?: string;
   /** Every png/anm2 under gfx/, paths relative to gfx root, forward slashes */
   gfxFiles: string[];
 }
@@ -93,6 +95,7 @@ export function buildCatalog(sources: CatalogSources): Catalog {
         subcategory: cat.subcategory,
         anm2Path: row.anm2Path,
         sheetPath: null,
+        costumeAnm2Path: null,
         source: "entities2",
       });
     }
@@ -118,6 +121,7 @@ export function buildCatalog(sources: CatalogSources): Catalog {
         subcategory: row.kind === "collectible" ? "Collectibles" : "Trinkets",
         anm2Path: null,
         sheetPath,
+        costumeAnm2Path: null,
         source: "items",
       });
     }
@@ -129,6 +133,20 @@ export function buildCatalog(sources: CatalogSources): Catalog {
   if (sources.playersXml) {
     const { rows, warnings: w } = parsePlayers(sources.playersXml);
     warnings.push(...w);
+
+    // costume id → gfx-relative anm2 path (hair/wings/fez overlays)
+    const costumeById = new Map<number, string>();
+    if (sources.costumes2Xml) {
+      const costumes = parseCostumes2(sources.costumes2Xml);
+      warnings.push(...costumes.warnings);
+      const root = costumes.anm2Root.replace(/^gfx\//i, "").replace(/\/+$/, "");
+      for (const c of costumes.rows) {
+        const rel = `${root}/${c.anm2Path}`;
+        if (hasFile(rel)) costumeById.set(c.id, rel);
+        else warnings.push(`costumes2: missing anm2 on disk: ${rel}`);
+      }
+    }
+
     const seenSkins = new Set<string>();
     for (const row of rows) {
       const sheetPath = `characters/costumes/${row.skin}`;
@@ -146,6 +164,7 @@ export function buildCatalog(sources: CatalogSources): Catalog {
         subcategory: null,
         anm2Path: "001.000_player.anm2",
         sheetPath,
+        costumeAnm2Path: costumeById.get(row.costume) ?? null,
         source: "players",
       });
     }
@@ -191,6 +210,7 @@ export function buildCatalog(sources: CatalogSources): Catalog {
       subcategory,
       anm2Path: isAnm2 ? rel : null,
       sheetPath: isPng ? rel : null,
+      costumeAnm2Path: null,
       source: "files",
     });
   }
