@@ -26,6 +26,7 @@ describe("buildCatalog (synthetic)", () => {
     playersXml: `<players>
       <player id="0" name="#ISAAC" skin="Character_001_Isaac.png"/>
       <player id="7" name="#AZAZEL" skin="Character_008_Azazel.png" costume="11"/>
+      <player id="20" name="#ESAU" skin="Character_003x_Esau.png" skinColor="3"/>
       <player id="99" name="#TAINTED" skin="Character_001_Isaac.png"/>
     </players>`,
     costumes2Xml: `<costumes anm2root="gfx/characters/">
@@ -43,6 +44,8 @@ describe("buildCatalog (synthetic)", () => {
       "characters/costumes/Character_001_Isaac.png",
       "characters/costumes/Character_008_Azazel.png",
       "characters/Character_008_AzazelHead.anm2",
+      "characters/costumes/Character_003x_Esau.png",
+      "characters/costumes/Character_003x_Esau_red.png",
       "ui/main menu/titlemenu.png",
       "ui/hudpickups.anm2",
       "ui/hudpickups.png",
@@ -117,6 +120,13 @@ describe("buildCatalog (synthetic)", () => {
     });
   });
 
+  it("applies skinColor recolor variants (Esau red)", () => {
+    expect(byKey.get("player:20")).toMatchObject({
+      name: "Esau",
+      sheetPath: "characters/costumes/Character_003x_Esau_red.png",
+    });
+  });
+
   it("classifies folder categories and skips pngs owned by an anm2", () => {
     expect(byKey.get("file:ui/main menu/titlemenu.png")).toMatchObject({
       category: "ui",
@@ -181,6 +191,11 @@ describe.skipIf(!hasGameFixtures)("buildCatalog (real game data)", () => {
   it("gives Azazel his wings costume from costumes2.xml", () => {
     const azazel = catalog.entries.find((e) => e.name === "Azazel");
     expect(azazel?.costumeAnm2Path?.toLowerCase()).toContain("azazelhead");
+  });
+
+  it("gives Esau his red skin variant", () => {
+    const esau = catalog.entries.find((e) => e.name === "Esau");
+    expect(esau?.sheetPath?.toLowerCase()).toContain("esau_red");
   });
 
   it('names "The Sad Onion" from its gfx filename', () => {

@@ -108,6 +108,8 @@ export interface PlayerRow {
   skin: string;
   /** costumes2.xml id for the signature costume (hair/wings); 0 = none */
   costume: number;
+  /** SkinColor enum: 0 pink (base file), 1 white, 2 black, 3 red, 4 green, 5 grey, 6 blue */
+  skinColor: number;
 }
 
 export function parsePlayers(text: string): {
@@ -124,7 +126,12 @@ export function parsePlayers(text: string): {
       warnings.push(`players: id=${str(p.id)} has no skin`);
       continue;
     }
-    rows.push({ id: int(p.id, -1), skin, costume: int(p.costume, 0) });
+    rows.push({
+      id: int(p.id, -1),
+      skin,
+      costume: int(p.costume, 0),
+      skinColor: int(p.skinColor, 0),
+    });
   }
   return { rows, warnings };
 }

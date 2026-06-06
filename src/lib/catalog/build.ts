@@ -147,9 +147,24 @@ export function buildCatalog(sources: CatalogSources): Catalog {
       }
     }
 
+    // SkinColor enum → recolored skin file suffix (Esau red, Bluebaby white…)
+    const SKIN_SUFFIX: Record<number, string> = {
+      1: "white",
+      2: "black",
+      3: "red",
+      4: "green",
+      5: "grey",
+      6: "blue",
+    };
+
     const seenSkins = new Set<string>();
     for (const row of rows) {
-      const sheetPath = `characters/costumes/${row.skin}`;
+      let sheetPath = `characters/costumes/${row.skin}`;
+      const suffix = SKIN_SUFFIX[row.skinColor];
+      if (suffix) {
+        const variant = sheetPath.replace(/\.png$/i, `_${suffix}.png`);
+        if (hasFile(variant)) sheetPath = variant;
+      }
       const skinKey = sheetPath.toLowerCase();
       if (seenSkins.has(skinKey)) continue; // tainted variants reuse skins
       seenSkins.add(skinKey);
