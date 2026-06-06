@@ -334,6 +334,33 @@ body {
   font-style: italic;
 }
 
+.floating-hint {
+  color: #7ab8ff;
+  font-style: normal;
+}
+
+.floating-hint b {
+  color: #aed4ff;
+}
+
+.opt input[type="number"] {
+  width: 44px;
+  background: var(--bg-raised);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 1px 4px;
+}
+
+.opt-kbd {
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+
 .editor-body {
   flex: 1;
   display: flex;

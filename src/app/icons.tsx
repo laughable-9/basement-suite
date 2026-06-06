@@ -74,6 +74,17 @@ export const GridIcon = () =>
 
 export const CloseIcon = () => svg(<path d="M4 4 L12 12 M12 4 L4 12" />);
 
+export const MoveIcon = () =>
+  svg(
+    <>
+      <path d="M8 1.5 V14.5 M1.5 8 H14.5" />
+      <path d="M6.3 3.2 L8 1.5 L9.7 3.2" />
+      <path d="M6.3 12.8 L8 14.5 L9.7 12.8" />
+      <path d="M3.2 6.3 L1.5 8 L3.2 9.7" />
+      <path d="M12.8 6.3 L14.5 8 L12.8 9.7" />
+    </>,
+  );
+
 export const PlayIcon = () =>
   svg(<path d="M5 3 L12.5 8 L5 13 Z" fill="currentColor" />);
 

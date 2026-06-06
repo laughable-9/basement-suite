@@ -11,6 +11,7 @@ import {
 import { useAppStore, type EditingTarget } from "../../app/store";
 import { cropGrid, type CropRect } from "./cropGrid";
 import { canRedo, canUndo, redo, undo } from "./history";
+import { commitFloating, makeFloating, type Floating } from "./floating";
 import { EditorCanvas, type Tool } from "./EditorCanvas";
 import {
   CloseIcon,
@@ -18,10 +19,14 @@ import {
   DropperIcon,
   EraserIcon,
   GridIcon,
+  MoveIcon,
   PencilIcon,
   RedoIcon,
   UndoIcon,
 } from "../../app/icons";
+
+const BRUSH_MIN = 1;
+const BRUSH_MAX = 64;
 
 const MAX_RECENT = 16;
 
@@ -47,6 +52,7 @@ const TOOLS: { id: Tool; icon: () => React.ReactNode; tip: string }[] = [
   { id: "pencil", icon: PencilIcon, tip: "Pencil (B)" },
   { id: "eraser", icon: EraserIcon, tip: "Eraser (E)" },
   { id: "eyedropper", icon: DropperIcon, tip: "Eyedropper (I)" },
+  { id: "pan", icon: MoveIcon, tip: "Pan view (H, or hold Space / middle-drag)" },
   { id: "inspect", icon: CursorIcon, tip: "Inspect — click a frame rect to jump the player (V)" },
 ];
 
@@ -63,6 +69,7 @@ export function Editor({ target }: { target: EditingTarget }) {
   const [recent, setRecent] = useState<Rgba[]>([]);
   const [showGrid, setShowGrid] = useState(true);
   const [zoom, setZoom] = useState(8);
+  const [floating, setFloating] = useState<Floating | null>(null);
   // Bumped on sheet mutations so undo/redo button state stays fresh.
   const [, setRev] = useState(0);
   const colorInputRef = useRef<HTMLInputElement>(null);
@@ -122,11 +129,50 @@ export function Editor({ target }: { target: EditingTarget }) {
     [requestPlayerJump],
   );
 
+  const stampFloating = useCallback(() => {
+    if (!doc || !floating) return;
+    commitFloating(doc, floating);
+    setFloating(null);
+  }, [doc, floating]);
+
+  const cancelFloating = useCallback(() => {
+    floating?.source.close();
+    setFloating(null);
+  }, [floating]);
+
+  // Ctrl+V: paste an image as a floating object (committed on Enter).
+  useEffect(() => {
+    const onPaste = async (e: ClipboardEvent) => {
+      if (!doc) return;
+      const item = [...(e.clipboardData?.items ?? [])].find((i) =>
+        i.type.startsWith("image/"),
+      );
+      const file = item?.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      const bitmap = await createImageBitmap(file);
+      floating?.source.close(); // replace any previous floating paste
+      setFloating(makeFloating(bitmap, doc));
+      setTool("inspect");
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [doc, floating]);
+
   // Keyboard shortcuts.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement) return;
       if (!doc) return;
+      if (floating && e.key === "Enter") {
+        e.preventDefault();
+        stampFloating();
+        return;
+      }
+      if (floating && e.key === "Escape") {
+        cancelFloating();
+        return;
+      }
       if (e.ctrlKey && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) redo(doc);
@@ -138,13 +184,18 @@ export function Editor({ target }: { target: EditingTarget }) {
         if (e.key === "b" || e.key === "p") setTool("pencil");
         else if (e.key === "e") setTool("eraser");
         else if (e.key === "i") setTool("eyedropper");
+        else if (e.key === "h") setTool("pan");
         else if (e.key === "v") setTool("inspect");
         else if (e.key === "g") setShowGrid((s) => !s);
+        else if (e.key === "[")
+          setBrushSize((s) => Math.max(BRUSH_MIN, s - 1));
+        else if (e.key === "]")
+          setBrushSize((s) => Math.min(BRUSH_MAX, s + 1));
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doc]);
+  }, [doc, floating, stampFloating, cancelFloating]);
 
   const fileName = useMemo(
     () => target.sheetPath.split(/[\\/]/).pop() ?? target.sheetPath,
@@ -179,20 +230,31 @@ export function Editor({ target }: { target: EditingTarget }) {
       </div>
 
       <div className="editor-options">
-        {showBrushOptions && (
+        {floating && (
+          <span className="opt-hint floating-hint">
+            Floating paste — drag to move, corner handles to scale ·{" "}
+            <b>Enter</b> commits (pixelized to sheet) · <b>Esc</b> cancels
+          </span>
+        )}
+        {!floating && showBrushOptions && (
           <>
             <label className="opt">
               Size
-              <select
+              <input
+                type="number"
+                min={BRUSH_MIN}
+                max={BRUSH_MAX}
                 value={brushSize}
-                onChange={(e) => setBrushSize(Number(e.target.value))}
-              >
-                {[1, 2, 4].map((s) => (
-                  <option key={s} value={s}>
-                    {s}px
-                  </option>
-                ))}
-              </select>
+                onChange={(e) =>
+                  setBrushSize(
+                    Math.max(
+                      BRUSH_MIN,
+                      Math.min(BRUSH_MAX, Number(e.target.value) || BRUSH_MIN),
+                    ),
+                  )
+                }
+              />
+              px <span className="opt-kbd">[ ]</span>
             </label>
             {tool === "pencil" && (
               <>
@@ -241,12 +303,15 @@ export function Editor({ target }: { target: EditingTarget }) {
             )}
           </>
         )}
-        {tool === "eyedropper" && (
+        {!floating && tool === "eyedropper" && (
           <span className="opt-hint">Click a pixel to sample its color (alpha included)</span>
         )}
-        {tool === "inspect" && (
+        {!floating && tool === "pan" && (
+          <span className="opt-hint">Drag to pan the view</span>
+        )}
+        {!floating && tool === "inspect" && (
           <span className="opt-hint">
-            Click a green frame rect to jump the player to that animation frame
+            Click a green frame rect to jump the player · Ctrl+V pastes an image
           </span>
         )}
       </div>
@@ -314,9 +379,13 @@ export function Editor({ target }: { target: EditingTarget }) {
             onStrokeEnd={onStrokeEnd}
             zoom={zoom}
             onZoom={setZoom}
+            floating={floating}
+            onFloatingChange={setFloating}
+            onFloatingCommit={stampFloating}
           />
           <div className="editor-hint">
-            wheel zoom · space / middle-drag pan · Alt+click rect jumps player
+            wheel zoom · space / middle-drag pan · [ ] brush size · Ctrl+V
+            paste image · Alt+click rect jumps player
           </div>
         </div>
       </div>

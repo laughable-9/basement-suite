@@ -2,11 +2,13 @@ import { useEffect, useRef } from "react";
 import type { SheetDoc } from "../../lib/sheets/store";
 import { beginStroke, type StrokeRecorder } from "./history";
 import type { CropRect } from "./cropGrid";
+import type { Floating } from "./floating";
 import type { Rgba } from "../../lib/anm2/types";
 
-export type Tool = "pencil" | "eraser" | "eyedropper" | "inspect";
+export type Tool = "pencil" | "eraser" | "eyedropper" | "pan" | "inspect";
 
 const ZOOM_LEVELS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32];
+const HANDLE_HIT_PX = 9;
 
 export interface EditorCanvasProps {
   doc: SheetDoc;
@@ -20,6 +22,20 @@ export interface EditorCanvasProps {
   onStrokeEnd: () => void;
   zoom: number;
   onZoom: (z: number) => void;
+  floating: Floating | null;
+  onFloatingChange: (f: Floating) => void;
+  /** Click outside the floating rect = commit (Photoshop behavior) */
+  onFloatingCommit: () => void;
+}
+
+type Corner = 0 | 1 | 2 | 3; // TL TR BL BR
+
+interface ScaleDrag {
+  corner: Corner;
+  anchorX: number;
+  anchorY: number;
+  origW: number;
+  origH: number;
 }
 
 interface Pointer {
@@ -27,6 +43,8 @@ interface Pointer {
   stroke: StrokeRecorder | null;
   lastDoc: { x: number; y: number } | null;
   lastScreen: { x: number; y: number };
+  floatMove: { dx: number; dy: number } | null;
+  floatScale: ScaleDrag | null;
 }
 
 export function EditorCanvas(props: EditorCanvasProps) {
@@ -43,8 +61,13 @@ export function EditorCanvas(props: EditorCanvasProps) {
     stroke: null,
     lastDoc: null,
     lastScreen: { x: 0, y: 0 },
+    floatMove: null,
+    floatScale: null,
   });
   const spaceRef = useRef(false);
+  // Preview buffer for the floating image, downsampled to its doc rect so the
+  // user sees the final pixelization while positioning.
+  const previewRef = useRef<HTMLCanvasElement | null>(null);
 
   // Center the sheet on first mount.
   useEffect(() => {
@@ -69,7 +92,8 @@ export function EditorCanvas(props: EditorCanvasProps) {
       if (canvas.width !== wrap.clientWidth) canvas.width = wrap.clientWidth;
       if (canvas.height !== wrap.clientHeight) canvas.height = wrap.clientHeight;
 
-      const { doc, rects, showGrid, zoom, tool, brushSize } = propsRef.current;
+      const { doc, rects, showGrid, zoom, tool, brushSize, floating } =
+        propsRef.current;
       const pan = panRef.current;
       const ctx = canvas.getContext("2d")!;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -111,9 +135,13 @@ export function EditorCanvas(props: EditorCanvasProps) {
         }
       }
 
+      if (floating) {
+        drawFloating(ctx, floating, pan, zoom);
+      }
+
       // Brush footprint preview
       const hover = hoverRef.current;
-      if (hover && (tool === "pencil" || tool === "eraser")) {
+      if (hover && !floating && (tool === "pencil" || tool === "eraser")) {
         const o = Math.floor((brushSize - 1) / 2);
         ctx.strokeStyle = "rgba(255,255,255,0.8)";
         ctx.strokeRect(
@@ -127,6 +155,63 @@ export function EditorCanvas(props: EditorCanvasProps) {
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, []);
+
+  function drawFloating(
+    ctx: CanvasRenderingContext2D,
+    f: Floating,
+    pan: { x: number; y: number },
+    zoom: number,
+  ) {
+    const w = Math.max(1, Math.round(f.w));
+    const h = Math.max(1, Math.round(f.h));
+    // Downsample source → doc-res preview (area average), then nearest-
+    // neighbor up to screen so the final pixel grid is visible pre-commit.
+    let prev = previewRef.current;
+    if (!prev) prev = previewRef.current = document.createElement("canvas");
+    if (prev.width !== w || prev.height !== h) {
+      prev.width = w;
+      prev.height = h;
+    }
+    const pctx = prev.getContext("2d")!;
+    pctx.imageSmoothingEnabled = true;
+    pctx.imageSmoothingQuality = "high";
+    pctx.clearRect(0, 0, w, h);
+    pctx.drawImage(f.source, 0, 0, w, h);
+
+    const sx = pan.x + f.x * zoom;
+    const sy = pan.y + f.y * zoom;
+    const sw = f.w * zoom;
+    const sh = f.h * zoom;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(prev, 0, 0, w, h, sx, sy, sw, sh);
+
+    // Dashed outline + corner handles
+    ctx.strokeStyle = "#7ab8ff";
+    ctx.setLineDash([5, 4]);
+    ctx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
+    ctx.setLineDash([]);
+    ctx.fillStyle = "#7ab8ff";
+    for (const [cx, cy] of cornerPoints(f, pan, zoom)) {
+      ctx.fillRect(cx - 3, cy - 3, 6, 6);
+    }
+  }
+
+  function cornerPoints(
+    f: Floating,
+    pan: { x: number; y: number },
+    zoom: number,
+  ): [number, number][] {
+    const x0 = pan.x + f.x * zoom;
+    const y0 = pan.y + f.y * zoom;
+    const x1 = pan.x + (f.x + f.w) * zoom;
+    const y1 = pan.y + (f.y + f.h) * zoom;
+    return [
+      [x0, y0],
+      [x1, y0],
+      [x0, y1],
+      [x1, y1],
+    ];
+  }
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -143,13 +228,23 @@ export function EditorCanvas(props: EditorCanvasProps) {
     };
   }, []);
 
-  function toDoc(e: React.PointerEvent): { x: number; y: number } {
+  function toScreen(e: React.PointerEvent): { x: number; y: number } {
     const rect = canvasRef.current!.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  function toDocF(e: React.PointerEvent): { x: number; y: number } {
+    const s = toScreen(e);
     const { zoom } = propsRef.current;
     return {
-      x: Math.floor((e.clientX - rect.left - panRef.current.x) / zoom),
-      y: Math.floor((e.clientY - rect.top - panRef.current.y) / zoom),
+      x: (s.x - panRef.current.x) / zoom,
+      y: (s.y - panRef.current.y) / zoom,
     };
+  }
+
+  function toDoc(e: React.PointerEvent): { x: number; y: number } {
+    const p = toDocF(e);
+    return { x: Math.floor(p.x), y: Math.floor(p.y) };
   }
 
   function inBounds(p: { x: number; y: number }): boolean {
@@ -206,19 +301,70 @@ export function EditorCanvas(props: EditorCanvasProps) {
     if (hit) onJump(hit);
   }
 
+  function floatingHit(
+    e: React.PointerEvent,
+    f: Floating,
+  ): { kind: "corner"; corner: Corner } | { kind: "inside" } | null {
+    const s = toScreen(e);
+    const { zoom } = propsRef.current;
+    const corners = cornerPoints(f, panRef.current, zoom);
+    for (let i = 0; i < 4; i++) {
+      if (
+        Math.abs(s.x - corners[i][0]) <= HANDLE_HIT_PX &&
+        Math.abs(s.y - corners[i][1]) <= HANDLE_HIT_PX
+      ) {
+        return { kind: "corner", corner: i as Corner };
+      }
+    }
+    const p = toDocF(e);
+    if (p.x >= f.x && p.x < f.x + f.w && p.y >= f.y && p.y < f.y + f.h) {
+      return { kind: "inside" };
+    }
+    return null;
+  }
+
   function onPointerDown(e: React.PointerEvent) {
     canvasRef.current!.setPointerCapture(e.pointerId);
     const ptr = pointerRef.current;
+    const { tool, doc, floating, onFloatingCommit } = propsRef.current;
     ptr.lastScreen = { x: e.clientX, y: e.clientY };
 
-    if (e.button === 1 || spaceRef.current) {
+    if (e.button === 1 || spaceRef.current || tool === "pan") {
       ptr.panning = true;
       return;
     }
     if (e.button !== 0) return;
 
+    // Floating paste intercepts all left clicks until resolved.
+    if (floating) {
+      const hit = floatingHit(e, floating);
+      if (hit === null) {
+        onFloatingCommit();
+        return;
+      }
+      if (hit.kind === "corner") {
+        const opposite: Corner = (3 - hit.corner) as Corner;
+        const pts = [
+          [floating.x, floating.y],
+          [floating.x + floating.w, floating.y],
+          [floating.x, floating.y + floating.h],
+          [floating.x + floating.w, floating.y + floating.h],
+        ];
+        ptr.floatScale = {
+          corner: hit.corner,
+          anchorX: pts[opposite][0],
+          anchorY: pts[opposite][1],
+          origW: floating.w,
+          origH: floating.h,
+        };
+      } else {
+        const p = toDocF(e);
+        ptr.floatMove = { dx: p.x - floating.x, dy: p.y - floating.y };
+      }
+      return;
+    }
+
     const p = toDoc(e);
-    const { tool, doc } = propsRef.current;
     if (tool === "inspect" || e.altKey) {
       if (inBounds(p)) jumpAt(p);
       return;
@@ -234,6 +380,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
 
   function onPointerMove(e: React.PointerEvent) {
     const ptr = pointerRef.current;
+    const { floating, onFloatingChange } = propsRef.current;
     const p = toDoc(e);
     hoverRef.current = inBounds(p) ? p : null;
 
@@ -241,6 +388,33 @@ export function EditorCanvas(props: EditorCanvasProps) {
       panRef.current.x += e.clientX - ptr.lastScreen.x;
       panRef.current.y += e.clientY - ptr.lastScreen.y;
       ptr.lastScreen = { x: e.clientX, y: e.clientY };
+      return;
+    }
+    if (floating && ptr.floatMove) {
+      const pf = toDocF(e);
+      onFloatingChange({
+        ...floating,
+        x: pf.x - ptr.floatMove.dx,
+        y: pf.y - ptr.floatMove.dy,
+      });
+      return;
+    }
+    if (floating && ptr.floatScale) {
+      const pf = toDocF(e);
+      const d = ptr.floatScale;
+      // Uniform scale anchored at the opposite corner, aspect preserved.
+      const sx = Math.abs(pf.x - d.anchorX) / d.origW;
+      const sy = Math.abs(pf.y - d.anchorY) / d.origH;
+      const s = Math.max(0.02, Math.max(sx, sy));
+      const w = d.origW * s;
+      const h = d.origH * s;
+      onFloatingChange({
+        ...floating,
+        w,
+        h,
+        x: pf.x < d.anchorX ? d.anchorX - w : d.anchorX,
+        y: pf.y < d.anchorY ? d.anchorY - h : d.anchorY,
+      });
       return;
     }
     if (ptr.stroke && ptr.lastDoc) {
@@ -252,6 +426,8 @@ export function EditorCanvas(props: EditorCanvasProps) {
   function onPointerUp() {
     const ptr = pointerRef.current;
     ptr.panning = false;
+    ptr.floatMove = null;
+    ptr.floatScale = null;
     if (ptr.stroke) {
       ptr.stroke.commit();
       ptr.stroke = null;
@@ -279,11 +455,13 @@ export function EditorCanvas(props: EditorCanvasProps) {
   }
 
   const cursor =
-    props.tool === "inspect"
-      ? "default"
-      : props.tool === "eyedropper"
-        ? "crosshair"
-        : "crosshair";
+    props.tool === "pan"
+      ? "grab"
+      : props.floating
+        ? "move"
+        : props.tool === "inspect"
+          ? "default"
+          : "crosshair";
 
   return (
     <div ref={wrapRef} className="editor-canvas-wrap checkerboard">
