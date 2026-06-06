@@ -40,6 +40,10 @@ function AnimThumb({ tab }: { tab: WorkTab }) {
     const observer = new IntersectionObserver(([hit]) => {
       if (!hit.isIntersecting) return;
       observer.disconnect();
+      // Buffer size = layout size, or the browser stretches the bitmap.
+      const box = canvas.parentElement!;
+      canvas.width = Math.max(32, box.clientWidth);
+      canvas.height = Math.max(32, box.clientHeight);
       thumbScene(tab).then((scene) => {
         if (cancelled || !scene) return;
         sceneRef.current = scene;
@@ -70,8 +74,10 @@ function AnimThumb({ tab }: { tab: WorkTab }) {
     if (!canvas || !scene || rafRef.current) return;
     const start = performance.now();
     const step = (now: number) => {
+      const speed = useAppStore.getState().playbackSpeed;
       const t =
-        (((now - start) / 1000) * scene.fps) % Math.max(1, scene.anim.frameNum);
+        (((now - start) / 1000) * scene.fps * speed) %
+        Math.max(1, scene.anim.frameNum);
       drawThumb(canvas, scene, t);
       rafRef.current = requestAnimationFrame(step);
     };
@@ -89,8 +95,6 @@ function AnimThumb({ tab }: { tab: WorkTab }) {
   return (
     <canvas
       ref={canvasRef}
-      width={112}
-      height={88}
       className="entry-thumb-canvas"
       onMouseEnter={startPlayback}
       onMouseLeave={stopPlayback}
