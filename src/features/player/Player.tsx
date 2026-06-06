@@ -90,8 +90,13 @@ export function Player({ path }: { path: string }) {
   );
 
   // Editor crop-grid click → jump to that animation/frame, paused.
+  // Each jump seq is consumed once so a stale jump in the store can't re-fire
+  // when a different anm2 finishes loading.
+  const consumedJumpRef = useRef(0);
   useEffect(() => {
     if (!playerJump || !loaded) return;
+    if (playerJump.seq === consumedJumpRef.current) return;
+    consumedJumpRef.current = playerJump.seq;
     if (!loaded.anm2.animations.some((a) => a.name === playerJump.animName))
       return;
     setAnimName(playerJump.animName);
