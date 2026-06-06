@@ -15,7 +15,15 @@ export interface PlayerJump {
   seq: number;
 }
 
+export interface Paths {
+  gfxRoot: string;
+  modsPath: string;
+}
+
 interface AppState {
+  /** Set once after config validation in App */
+  paths: Paths | null;
+  setPaths: (paths: Paths) => void;
   selected: Entry | null;
   select: (entry: Entry | null) => void;
   editing: EditingTarget | null;
@@ -26,6 +34,8 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
+  paths: null,
+  setPaths: (paths) => set({ paths }),
   selected: null,
   select: (entry) => set({ selected: entry }),
   editing: null,

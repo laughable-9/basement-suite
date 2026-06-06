@@ -12,6 +12,7 @@ import { useAppStore, type EditingTarget } from "../../app/store";
 import { cropGrid, type CropRect } from "./cropGrid";
 import { canRedo, canUndo, redo, undo } from "./history";
 import { commitFloating, makeFloating, type Floating } from "./floating";
+import { SaveToModDialog } from "../export/SaveToModDialog";
 import { EditorCanvas, type Tool } from "./EditorCanvas";
 import {
   CloseIcon,
@@ -70,6 +71,8 @@ export function Editor({ target }: { target: EditingTarget }) {
   const [showGrid, setShowGrid] = useState(true);
   const [zoom, setZoom] = useState(8);
   const [floating, setFloating] = useState<Floating | null>(null);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [savedPath, setSavedPath] = useState<string | null>(null);
   // Bumped on sheet mutations so undo/redo button state stays fresh.
   const [, setRev] = useState(0);
   const colorInputRef = useRef<HTMLInputElement>(null);
@@ -173,7 +176,10 @@ export function Editor({ target }: { target: EditingTarget }) {
         cancelFloating();
         return;
       }
-      if (e.ctrlKey && e.key.toLowerCase() === "z") {
+      if (e.ctrlKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        setSaveOpen(true);
+      } else if (e.ctrlKey && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) redo(doc);
         else undo(doc);
@@ -216,10 +222,22 @@ export function Editor({ target }: { target: EditingTarget }) {
         {doc.dirty && (
           <span className="dirty-dot" title="Unsaved — edits are in-memory only" />
         )}
+        {savedPath && !doc.dirty && (
+          <span className="saved-note" title={savedPath}>
+            saved ✓
+          </span>
+        )}
         <span className="toolbar-spacer" />
         <span className="editor-meta">
           {doc.canvas.width}×{doc.canvas.height}px · {zoom}×
         </span>
+        <button
+          className="save-btn"
+          onClick={() => setSaveOpen(true)}
+          title="Write this sheet into a mod folder (Ctrl+S)"
+        >
+          Save to mod
+        </button>
         <button
           className="rail-btn"
           onClick={closeEditor}
@@ -385,10 +403,20 @@ export function Editor({ target }: { target: EditingTarget }) {
           />
           <div className="editor-hint">
             wheel zoom · space / middle-drag pan · [ ] brush size · Ctrl+V
-            paste image · Alt+click rect jumps player
+            paste image · Ctrl+S save to mod · Alt+click rect jumps player
           </div>
         </div>
       </div>
+      {saveOpen && (
+        <SaveToModDialog
+          doc={doc}
+          onClose={() => setSaveOpen(false)}
+          onSaved={(p) => {
+            setSaveOpen(false);
+            setSavedPath(p);
+          }}
+        />
+      )}
     </div>
   );
 }

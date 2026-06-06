@@ -483,6 +483,102 @@ body {
   background: var(--bg-raised);
 }
 
+.save-btn {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.save-btn:hover {
+  filter: brightness(1.15);
+}
+
+.saved-note {
+  font-size: 11px;
+  color: #8ce8a0;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  z-index: 100;
+}
+
+.modal {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 18px 22px;
+  width: 460px;
+  max-width: 90vw;
+}
+
+.modal h2 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.modal-field input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.modal-preview {
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+  margin: 8px 0 0;
+}
+
+.modal-note {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin: 10px 0 0;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modal-btn {
+  width: auto;
+  padding: 4px 14px;
+  font-size: 12px;
+}
+
+.modal-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.modal-btn.primary:disabled {
+  opacity: 0.5;
+}
+
 .edit-link {
   border: 1px solid var(--border);
   background: var(--bg-raised);

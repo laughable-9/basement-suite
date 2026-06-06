@@ -10,8 +10,16 @@ export default function App() {
   const editing = useAppStore((s) => s.editing);
 
   useEffect(() => {
-    loadConfig().then(setCfg, (err) =>
-      setCfg({ status: "error", problems: [String(err)] }),
+    loadConfig().then(
+      (c) => {
+        if (c.status === "ok") {
+          useAppStore
+            .getState()
+            .setPaths({ gfxRoot: c.gfxRoot, modsPath: c.config.modsPath });
+        }
+        setCfg(c);
+      },
+      (err) => setCfg({ status: "error", problems: [String(err)] }),
     );
   }, []);
 
