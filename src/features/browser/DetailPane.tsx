@@ -2,16 +2,13 @@ import { useEffect, useState } from "react";
 import { pngUrl } from "../../lib/fsx/fs";
 import { useAppStore } from "../../app/store";
 import { Player } from "../player/Player";
+import { CatalogDebug } from "../catalog/CatalogDebug";
 
 export function DetailPane() {
   const selected = useAppStore((s) => s.selected);
 
   if (!selected) {
-    return (
-      <div className="detail-empty">
-        Select a spritesheet or .anm2 file on the left
-      </div>
-    );
+    return <CatalogDebug />;
   }
   return (
     <div className="detail">

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Entry } from "../lib/fsx/fs";
+import type { Catalog } from "../lib/catalog/types";
 
 export interface EditingTarget {
   /** Absolute path of the spritesheet being edited */
@@ -30,6 +31,9 @@ interface AppState {
   /** Set once after config validation in App */
   paths: Paths | null;
   setPaths: (paths: Paths) => void;
+  /** Semantic catalog (UI_PLAN §2); null while loading */
+  catalog: Catalog | null;
+  setCatalog: (catalog: Catalog) => void;
   selected: Entry | null;
   select: (entry: Entry | null) => void;
   editing: EditingTarget | null;
@@ -47,6 +51,8 @@ let nextToastId = 1;
 export const useAppStore = create<AppState>((set) => ({
   paths: null,
   setPaths: (paths) => set({ paths }),
+  catalog: null,
+  setCatalog: (catalog) => set({ catalog }),
   selected: null,
   select: (entry) => set({ selected: entry }),
   editing: null,

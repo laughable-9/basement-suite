@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { exists } from "@tauri-apps/plugin-fs";
 import { loadConfig, type ConfigState } from "./lib/fsx/config";
+import { loadCatalog } from "./lib/catalog/load";
 import { Tree } from "./features/browser/Tree";
 import { DetailPane } from "./features/browser/DetailPane";
 import { Editor } from "./features/editor/Editor";
@@ -74,6 +75,14 @@ export default function App() {
             .getState()
             .setPaths({ gfxRoot: c.gfxRoot, modsPath: c.config.modsPath });
           await restoreSession();
+          // Catalog builds in the background; UI shows progress meanwhile.
+          loadCatalog(c.gfxRoot).then(
+            (catalog) => useAppStore.getState().setCatalog(catalog),
+            (e) =>
+              useAppStore
+                .getState()
+                .addToast(`Catalog failed to load: ${e}`, "error"),
+          );
         }
         setCfg(c);
       },
