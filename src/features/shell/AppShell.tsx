@@ -50,15 +50,14 @@ export function AppShell() {
   const setSearchQuery = useAppStore((s) => s.setSearchQuery);
   const editing = useAppStore((s) => s.editing);
   const catalog = useAppStore((s) => s.catalog);
-  const paths = useAppStore((s) => s.paths);
   const [logo, setLogo] = useState<string | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
-  // Isaac thumbs-up as window icon + logo, rendered from local game files.
+  // Isaac thumbs-up (public/icon.png) as window icon + app-bar logo.
   useEffect(() => {
-    if (paths) applyIsaacBranding(paths.gfxRoot).then(setLogo);
-  }, [paths]);
+    applyIsaacBranding().then(setLogo);
+  }, []);
 
   // Ctrl+Tab cycles tabs (incl. Home), Ctrl+W closes the active one.
   useEffect(() => {
