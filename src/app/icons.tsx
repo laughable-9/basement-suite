@@ -174,6 +174,15 @@ export const FilmIcon = () =>
     </>,
   );
 
+export const GearIcon = () =>
+  svg(
+    <>
+      <circle cx="8" cy="8" r="2.2" />
+      <path d="M8 1.8 V3.6 M8 12.4 V14.2 M1.8 8 H3.6 M12.4 8 H14.2 M3.6 3.6 L4.9 4.9 M11.1 11.1 L12.4 12.4 M12.4 3.6 L11.1 4.9 M4.9 11.1 L3.6 12.4" />
+      <circle cx="8" cy="8" r="4.6" />
+    </>,
+  );
+
 export const FolderIcon = () =>
   svg(<path d="M2 4 C2 3.4 2.4 3 3 3 H6 L7.5 4.8 H13 C13.6 4.8 14 5.2 14 5.8 V12 C14 12.6 13.6 13 13 13 H3 C2.4 13 2 12.6 2 12 Z" />);
 

@@ -387,6 +387,87 @@ body {
   -webkit-box-orient: vertical;
 }
 
+.settings-popover {
+  position: absolute;
+  top: 50px;
+  right: 12px;
+  z-index: 150;
+  width: 380px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 18px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+
+.settings-popover h3 {
+  font-size: 13px;
+  margin: 10px 0 6px;
+  color: var(--text-dim);
+}
+
+.settings-popover h3:first-child {
+  margin-top: 0;
+}
+
+.settings-paths {
+  margin: 0;
+  font-size: 12px;
+}
+
+.settings-paths dt {
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+.settings-paths dd {
+  margin: 1px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 6px 0;
+}
+
+.settings-note code {
+  background: var(--bg);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.settings-about {
+  font-size: 11px;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin: 12px 0 0;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  gap: 12px;
+  padding: 8px 16px;
+}
+
+.skeleton-card {
+  height: 188px;
+  border-radius: 8px;
+  background: var(--bg-raised);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-text {
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
 .files-tree {
   flex: 1;
   overflow-y: auto;

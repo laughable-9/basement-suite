@@ -42,7 +42,19 @@ export function Home() {
   }, [catalog, searching, query, inCategory, home.subcategory]);
 
   if (!catalog) {
-    return <div className="detail-empty">Building catalog…</div>;
+    // Skeleton grid while the catalog builds (a few seconds on first launch).
+    return (
+      <div className="home">
+        <div className="home-header">
+          <span className="breadcrumb skeleton-text">Building catalog…</span>
+        </div>
+        <div className="skeleton-grid">
+          {Array.from({ length: 24 }, (_, i) => (
+            <div key={i} className="skeleton-card" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   return (

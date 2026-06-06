@@ -12,6 +12,7 @@ import {
   DropIcon,
   FilmIcon,
   FolderIcon,
+  GearIcon,
   GridIcon,
   HeartIcon,
   HomeIcon,
@@ -26,6 +27,7 @@ import {
 import { CATEGORY_LABELS } from "../../lib/catalog/types";
 import { Home } from "../home/Home";
 import { WorkTabView } from "../work/WorkTabView";
+import { SettingsPopover } from "./SettingsPopover";
 
 /** Amber dot on tabs whose editing sheet has unsaved changes. */
 function TabDirtyDot({ tab }: { tab: WorkTab }) {
@@ -82,6 +84,7 @@ export function AppShell() {
   const playbackSpeed = useAppStore((s) => s.playbackSpeed);
   const setPlaybackSpeed = useAppStore((s) => s.setPlaybackSpeed);
   const [logo, setLogo] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
 
@@ -161,6 +164,16 @@ export function AppShell() {
             }}
           />
         </label>
+        <button
+          className="rail-btn"
+          title="Settings"
+          onClick={() => setSettingsOpen((o) => !o)}
+        >
+          <GearIcon />
+        </button>
+        {settingsOpen && (
+          <SettingsPopover onClose={() => setSettingsOpen(false)} />
+        )}
       </header>
 
       <div className="shell-body">
