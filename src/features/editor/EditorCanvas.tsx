@@ -68,6 +68,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
   // Preview buffer for the floating image, downsampled to its doc rect so the
   // user sees the final pixelization while positioning.
   const previewRef = useRef<HTMLCanvasElement | null>(null);
+  const prevSourceRef = useRef<ImageBitmap | null>(null);
 
   // Center the sheet on first mount.
   useEffect(() => {
@@ -166,17 +167,21 @@ export function EditorCanvas(props: EditorCanvasProps) {
     const h = Math.max(1, Math.round(f.h));
     // Downsample source → doc-res preview (area average), then nearest-
     // neighbor up to screen so the final pixel grid is visible pre-commit.
+    // Recomputed only when the source or target size changes — not per frame.
     let prev = previewRef.current;
     if (!prev) prev = previewRef.current = document.createElement("canvas");
-    if (prev.width !== w || prev.height !== h) {
+    const stale =
+      prev.width !== w || prev.height !== h || prevSourceRef.current !== f.source;
+    if (stale) {
       prev.width = w;
       prev.height = h;
+      prevSourceRef.current = f.source;
+      const pctx = prev.getContext("2d")!;
+      pctx.imageSmoothingEnabled = true;
+      pctx.imageSmoothingQuality = "high";
+      pctx.clearRect(0, 0, w, h);
+      pctx.drawImage(f.source, 0, 0, w, h);
     }
-    const pctx = prev.getContext("2d")!;
-    pctx.imageSmoothingEnabled = true;
-    pctx.imageSmoothingQuality = "high";
-    pctx.clearRect(0, 0, w, h);
-    pctx.drawImage(f.source, 0, 0, w, h);
 
     const sx = pan.x + f.x * zoom;
     const sy = pan.y + f.y * zoom;
