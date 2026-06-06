@@ -19,14 +19,19 @@ interface Loaded {
   sheetPaths: Map<number, string>;
   /** Spritesheets whose PNG failed to load (broken refs like raglich) */
   missing: string[];
+  /** Character costume overlay (hair/wings), composited by state name */
+  costume: { anm2: Anm2; sheets: SheetMap } | null;
 }
 
-async function load(path: string, skinPath?: string): Promise<Loaded> {
-  const anm2 = parseAnm2(await readText(path));
-  const dir = dirname(path);
+async function loadSheets(
+  anm2: Anm2,
+  anm2Path: string,
+  sheetPaths: Map<number, string>,
+  missing: string[],
+  skinPath?: string,
+): Promise<SheetMap> {
+  const dir = dirname(anm2Path);
   const sheets: SheetMap = new Map();
-  const sheetPaths = new Map<number, string>();
-  const missing: string[] = [];
   await Promise.all(
     anm2.content.spritesheets.map(async (s) => {
       // Character tabs substitute their skin for the player anm2's sheet 0
@@ -44,16 +49,44 @@ async function load(path: string, skinPath?: string): Promise<Loaded> {
       }
     }),
   );
-  return { anm2, sheets, sheetPaths, missing };
+  return sheets;
+}
+
+async function load(
+  path: string,
+  skinPath?: string,
+  costumePath?: string,
+): Promise<Loaded> {
+  const anm2 = parseAnm2(await readText(path));
+  const sheetPaths = new Map<number, string>();
+  const missing: string[] = [];
+  const sheets = await loadSheets(anm2, path, sheetPaths, missing, skinPath);
+
+  let costume: Loaded["costume"] = null;
+  if (costumePath) {
+    try {
+      const cAnm2 = parseAnm2(await readText(costumePath));
+      costume = {
+        anm2: cAnm2,
+        sheets: await loadSheets(cAnm2, costumePath, new Map(), []),
+      };
+    } catch {
+      // costume is decoration — never block playback
+    }
+  }
+  return { anm2, sheets, sheetPaths, missing, costume };
 }
 
 export function Player({
   path,
   skinPath,
+  costumePath,
 }: {
   path: string;
   /** Character skin override (replaces spritesheet 0 + composites the head) */
   skinPath?: string;
+  /** Character costume anm2 (hair/wings), composited by state name */
+  costumePath?: string;
 }) {
   const openEditor = useAppStore((s) => s.openEditor);
   const playerJump = useAppStore((s) => s.playerJump);
@@ -81,7 +114,7 @@ export function Player({
     let cancelled = false;
     setLoaded(null);
     setError(null);
-    load(path, skinPath).then(
+    load(path, skinPath, costumePath).then(
       (l) => {
         if (cancelled) return;
         setLoaded(l);
@@ -98,7 +131,7 @@ export function Player({
     return () => {
       cancelled = true;
     };
-  }, [path, skinPath]);
+  }, [path, skinPath, costumePath]);
 
   const anim: Anm2Animation | undefined = loaded?.anm2.animations.find(
     (a) => a.name === animName,
@@ -180,15 +213,22 @@ export function Player({
           renderFrame(ctx, loaded.anm2, anim, next, loaded.sheets, 0.25);
         }
       }
+      // Engine-ish costume ordering: wings behind the body, hair over the head.
+      const costume = loaded.costume;
+      const cBody = costume?.anm2.animations.find((a) => a.name === anim.name);
+      const cHead =
+        headAnim &&
+        costume?.anm2.animations.find((a) => a.name === headAnim.name);
+      const at = (a: Anm2Animation) => tick % Math.max(1, a.frameNum);
+      if (costume && cBody) {
+        renderFrame(ctx, costume.anm2, cBody, at(cBody), costume.sheets);
+      }
       renderFrame(ctx, loaded.anm2, anim, tick, loaded.sheets);
       if (headAnim && headAnim.frameNum > 0) {
-        renderFrame(
-          ctx,
-          loaded.anm2,
-          headAnim,
-          tick % headAnim.frameNum,
-          loaded.sheets,
-        );
+        renderFrame(ctx, loaded.anm2, headAnim, at(headAnim), loaded.sheets);
+      }
+      if (costume && cHead) {
+        renderFrame(ctx, costume.anm2, cHead, at(cHead), costume.sheets);
       }
     }
   }, [loaded, anim, headAnim, tick, zoom, sheetRev, onion]);

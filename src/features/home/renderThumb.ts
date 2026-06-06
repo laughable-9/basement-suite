@@ -12,6 +12,16 @@ import { dirname, resolveRelative } from "../../lib/fsx/resolve";
 import { getSheetDoc } from "../../lib/sheets/store";
 import { renderFrame, type SheetMap } from "../player/render";
 
+/** A costume overlay (hair/wings/fez) with its state animations matched. */
+export interface CostumePart {
+  anm2: Anm2;
+  sheets: SheetMap;
+  /** Costume animation matching the body state (Azazel's wings ride WalkDown) */
+  bodyAnim: Anm2Animation | null;
+  /** Costume animation matching the head state (Maggy's hair rides HeadDown) */
+  headAnim: Anm2Animation | null;
+}
+
 export interface ThumbScene {
   anm2: Anm2;
   anim: Anm2Animation;
@@ -21,6 +31,7 @@ export interface ThumbScene {
    * scenes carry the head animation so cards/icons show a whole person.
    */
   headAnim: Anm2Animation | null;
+  costume: CostumePart | null;
   sheets: SheetMap;
   fps: number;
   /** Sheet doc paths involved (live-link redraw hooks) */
@@ -30,28 +41,41 @@ export interface ThumbScene {
 const MAX_THUMB_ZOOM = 3;
 const scenes = new Map<string, Promise<ThumbScene | null>>();
 
+async function loadSheets(
+  anm2: Anm2,
+  anm2Path: string,
+  sheetPaths: string[],
+  skinPath?: string | null,
+): Promise<SheetMap> {
+  const dir = dirname(anm2Path);
+  const sheets: SheetMap = new Map();
+  await Promise.all(
+    anm2.content.spritesheets.map(async (s) => {
+      // Character tabs carry a skin sheet that replaces the player
+      // anm2's sheet 0 (all skins share its layout).
+      const path =
+        skinPath && s.id === 0 ? skinPath : resolveRelative(dir, s.rawPath);
+      try {
+        sheets.set(s.id, (await getSheetDoc(path)).canvas);
+        sheetPaths.push(path);
+      } catch {
+        sheets.set(s.id, null);
+      }
+    }),
+  );
+  return sheets;
+}
+
 async function load(tab: WorkTab): Promise<ThumbScene | null> {
   if (!tab.anm2Path) return null;
   try {
     const anm2 = parseAnm2(await readText(tab.anm2Path));
-    const dir = dirname(tab.anm2Path);
-    const sheets: SheetMap = new Map();
     const sheetPaths: string[] = [];
-    await Promise.all(
-      anm2.content.spritesheets.map(async (s) => {
-        // Character tabs carry a skin sheet that replaces the player
-        // anm2's sheet 0 (all skins share its layout).
-        const path =
-          tab.sheetPath && s.id === 0
-            ? tab.sheetPath
-            : resolveRelative(dir, s.rawPath);
-        try {
-          sheets.set(s.id, (await getSheetDoc(path)).canvas);
-          sheetPaths.push(path);
-        } catch {
-          sheets.set(s.id, null);
-        }
-      }),
+    const sheets = await loadSheets(
+      anm2,
+      tab.anm2Path,
+      sheetPaths,
+      tab.sheetPath,
     );
     const anim =
       anm2.animations.find((a) => a.name === anm2.defaultAnimation) ??
@@ -65,8 +89,36 @@ async function load(tab: WorkTab): Promise<ThumbScene | null> {
         ) ?? null)
       : null;
 
+    // Signature costume (hair/wings): same state names, separate anm2.
+    let costume: CostumePart | null = null;
+    if (tab.costumeAnm2Path) {
+      try {
+        const cAnm2 = parseAnm2(await readText(tab.costumeAnm2Path));
+        const cSheets = await loadSheets(cAnm2, tab.costumeAnm2Path, sheetPaths);
+        costume = {
+          anm2: cAnm2,
+          sheets: cSheets,
+          bodyAnim:
+            cAnm2.animations.find((a) => a.name === anim.name) ?? null,
+          headAnim: headAnim
+            ? (cAnm2.animations.find((a) => a.name === headAnim.name) ?? null)
+            : null,
+        };
+      } catch {
+        // costume is decoration — never block the scene
+      }
+    }
+
     if (!frameBounds(anim, 0)) return null; // fully invisible first frame
-    return { anm2, anim, headAnim, sheets, fps: anm2.info.fps, sheetPaths };
+    return {
+      anm2,
+      anim,
+      headAnim,
+      costume,
+      sheets,
+      fps: anm2.info.fps,
+      sheetPaths,
+    };
   } catch {
     return null;
   }
@@ -124,14 +176,19 @@ export function drawThumb(
 
   ctx.translate(w / 2 - cx * scale, h / 2 - cy * scale);
   ctx.scale(scale, scale);
+
+  const at = (anim: Anm2Animation) => t % Math.max(1, anim.frameNum);
+  const { costume } = scene;
+  // Engine-ish ordering: costume body parts (wings) behind the body,
+  // costume head parts (hair/fez) over the head.
+  if (costume?.bodyAnim) {
+    renderFrame(ctx, costume.anm2, costume.bodyAnim, at(costume.bodyAnim), costume.sheets);
+  }
   renderFrame(ctx, scene.anm2, scene.anim, t, scene.sheets);
   if (scene.headAnim) {
-    renderFrame(
-      ctx,
-      scene.anm2,
-      scene.headAnim,
-      t % Math.max(1, scene.headAnim.frameNum),
-      scene.sheets,
-    );
+    renderFrame(ctx, scene.anm2, scene.headAnim, at(scene.headAnim), scene.sheets);
+  }
+  if (costume?.headAnim) {
+    renderFrame(ctx, costume.anm2, costume.headAnim, at(costume.headAnim), costume.sheets);
   }
 }
