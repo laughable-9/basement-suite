@@ -20,7 +20,13 @@ interface Loaded {
   /** Spritesheets whose PNG failed to load (broken refs like raglich) */
   missing: string[];
   /** Character costume overlay (hair/wings), composited by state name */
-  costume: { anm2: Anm2; sheets: SheetMap } | null;
+  costume: {
+    anm2: Anm2;
+    sheets: SheetMap;
+    /** id → resolved path (costume sheets are editable too) */
+    byId: Map<number, string>;
+    path: string;
+  } | null;
 }
 
 async function load(
@@ -37,9 +43,12 @@ async function load(
   if (costumePath) {
     try {
       const cAnm2 = parseAnm2(await readText(costumePath));
+      const cLoaded = await loadAnm2Sheets(cAnm2, costumePath);
       costume = {
         anm2: cAnm2,
-        sheets: (await loadAnm2Sheets(cAnm2, costumePath)).sheets,
+        sheets: cLoaded.sheets,
+        byId: cLoaded.byId,
+        path: costumePath,
       };
     } catch {
       // costume is decoration — never block playback
@@ -84,10 +93,15 @@ export function Player({
   const [sheetRev, setSheetRev] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Live link: repaint when any of this anm2's sheets is edited.
+  // Live link: repaint when any of this anm2's sheets is edited —
+  // including costume overlay sheets.
   useEffect(() => {
     if (!loaded) return;
-    const unsubs = [...loaded.sheetPaths.values()].map((p) =>
+    const paths = [
+      ...loaded.sheetPaths.values(),
+      ...(loaded.costume ? loaded.costume.byId.values() : []),
+    ];
+    const unsubs = paths.map((p) =>
       subscribeSheet(p, () => setSheetRev((r) => r + 1)),
     );
     return () => unsubs.forEach((u) => u());
@@ -336,6 +350,31 @@ export function Player({
           </li>
         ))}
       </ul>
+      {loaded.costume && (
+        <>
+          <h3>Costume sheets (hair / wings / head overlays)</h3>
+          <ul className="sheet-list">
+            {loaded.costume.anm2.content.spritesheets.map((s) => (
+              <li key={s.id}>
+                {s.rawPath}{" "}
+                {loaded.costume!.sheets.get(s.id) && tabId !== undefined && (
+                  <button
+                    className="edit-link"
+                    onClick={() =>
+                      setTabEditing(tabId, {
+                        sheetPath: loaded.costume!.byId.get(s.id)!,
+                        anm2Path: loaded.costume!.path,
+                      })
+                    }
+                  >
+                    edit
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }
