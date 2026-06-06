@@ -15,6 +15,12 @@ export interface PlayerJump {
   seq: number;
 }
 
+export interface Toast {
+  id: number;
+  text: string;
+  kind: "success" | "error";
+}
+
 export interface Paths {
   gfxRoot: string;
   modsPath: string;
@@ -31,7 +37,12 @@ interface AppState {
   closeEditor: () => void;
   playerJump: PlayerJump | null;
   requestPlayerJump: (animName: string, tick: number) => void;
+  toasts: Toast[];
+  addToast: (text: string, kind: Toast["kind"]) => void;
+  dismissToast: (id: number) => void;
 }
+
+let nextToastId = 1;
 
 export const useAppStore = create<AppState>((set) => ({
   paths: null,
@@ -47,4 +58,9 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({
       playerJump: { animName, tick, seq: (s.playerJump?.seq ?? 0) + 1 },
     })),
+  toasts: [],
+  addToast: (text, kind) =>
+    set((s) => ({ toasts: [...s.toasts, { id: nextToastId++, text, kind }] })),
+  dismissToast: (id) =>
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));
