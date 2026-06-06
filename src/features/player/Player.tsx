@@ -3,8 +3,8 @@ import { parseAnm2 } from "../../lib/anm2/parse";
 import { normalizeTime } from "../../lib/anm2/timeline";
 import type { Anm2, Anm2Animation } from "../../lib/anm2/types";
 import { readText } from "../../lib/fsx/fs";
-import { dirname, resolveRelative } from "../../lib/fsx/resolve";
-import { getSheetDoc, subscribeSheet } from "../../lib/sheets/store";
+import { headAnimFor } from "../../lib/anm2/compose";
+import { loadAnm2Sheets, subscribeSheet } from "../../lib/sheets/store";
 import { useAppStore } from "../../app/store";
 import { PauseIcon, PlayIcon } from "../../app/icons";
 import { renderFrame, type SheetMap } from "./render";
@@ -23,44 +23,15 @@ interface Loaded {
   costume: { anm2: Anm2; sheets: SheetMap } | null;
 }
 
-async function loadSheets(
-  anm2: Anm2,
-  anm2Path: string,
-  sheetPaths: Map<number, string>,
-  missing: string[],
-  skinPath?: string,
-): Promise<SheetMap> {
-  const dir = dirname(anm2Path);
-  const sheets: SheetMap = new Map();
-  await Promise.all(
-    anm2.content.spritesheets.map(async (s) => {
-      // Character tabs substitute their skin for the player anm2's sheet 0
-      // (all character sheets share the same layout).
-      const resolved =
-        skinPath && s.id === 0 ? skinPath : resolveRelative(dir, s.rawPath);
-      sheetPaths.set(s.id, resolved);
-      try {
-        // Shared sheet documents: the editor mutates these same canvases,
-        // so edits appear in playback immediately (live link).
-        sheets.set(s.id, (await getSheetDoc(resolved)).canvas);
-      } catch {
-        sheets.set(s.id, null);
-        missing.push(s.rawPath);
-      }
-    }),
-  );
-  return sheets;
-}
-
 async function load(
   path: string,
   skinPath?: string,
   costumePath?: string,
 ): Promise<Loaded> {
   const anm2 = parseAnm2(await readText(path));
-  const sheetPaths = new Map<number, string>();
-  const missing: string[] = [];
-  const sheets = await loadSheets(anm2, path, sheetPaths, missing, skinPath);
+  // Shared sheet documents: the editor mutates these same canvases,
+  // so edits appear in playback immediately (live link).
+  const main = await loadAnm2Sheets(anm2, path, skinPath);
 
   let costume: Loaded["costume"] = null;
   if (costumePath) {
@@ -68,13 +39,19 @@ async function load(
       const cAnm2 = parseAnm2(await readText(costumePath));
       costume = {
         anm2: cAnm2,
-        sheets: await loadSheets(cAnm2, costumePath, new Map(), []),
+        sheets: (await loadAnm2Sheets(cAnm2, costumePath)).sheets,
       };
     } catch {
       // costume is decoration — never block playback
     }
   }
-  return { anm2, sheets, sheetPaths, missing, costume };
+  return {
+    anm2,
+    sheets: main.sheets,
+    sheetPaths: main.byId,
+    missing: main.missing,
+    costume,
+  };
 }
 
 export function Player({
@@ -140,12 +117,8 @@ export function Player({
   // Character context: the engine composites body + head animations; do the
   // same for Walk* so characters aren't headless (SCAN quirk: HeadDown is a
   // separate 4-frame animation, not a layer of WalkDown).
-  const headAnim: Anm2Animation | undefined =
-    skinPath && anim?.name.startsWith("Walk")
-      ? loaded?.anm2.animations.find(
-          (a) => a.name === anim.name.replace(/^Walk/, "Head"),
-        )
-      : undefined;
+  const headAnim: Anm2Animation | null =
+    skinPath && anim && loaded ? headAnimFor(loaded.anm2, anim) : null;
 
   // Editor crop-grid click → jump to that animation/frame, paused.
   // Each jump seq is consumed once so a stale jump in the store can't re-fire

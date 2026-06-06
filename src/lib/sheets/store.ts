@@ -3,6 +3,11 @@
 // Nothing here touches disk after load — saving is M3's mod export.
 
 import { readFile } from "@tauri-apps/plugin-fs";
+import type { Anm2 } from "../anm2/types";
+import { dirname, resolveRelative } from "../fsx/resolve";
+
+/** Spritesheet pixel sources by spritesheet id; null = file missing. */
+export type SheetMap = Map<number, HTMLCanvasElement | null>;
 
 export interface SheetDoc {
   path: string;
@@ -59,6 +64,49 @@ export function markSheetClean(doc: SheetDoc): void {
   doc.version++;
   doc.dirty = false;
   listeners.get(doc.path)?.forEach((cb) => cb());
+}
+
+export interface LoadedAnm2Sheets {
+  sheets: SheetMap;
+  /** Resolved absolute paths that loaded (live-link subscription hooks) */
+  paths: string[];
+  /** Spritesheet id → resolved absolute path (editor entry points) */
+  byId: Map<number, string>;
+  /** Raw XML paths that failed to load (broken refs like raglich) */
+  missing: string[];
+}
+
+/**
+ * Load every spritesheet an anm2 references as shared sheet docs.
+ * `skinPath` substitutes sheet id 0 (character skins share the player layout).
+ */
+export async function loadAnm2Sheets(
+  anm2: Anm2,
+  anm2Path: string,
+  skinPath?: string | null,
+): Promise<LoadedAnm2Sheets> {
+  const dir = dirname(anm2Path);
+  const result: LoadedAnm2Sheets = {
+    sheets: new Map(),
+    paths: [],
+    byId: new Map(),
+    missing: [],
+  };
+  await Promise.all(
+    anm2.content.spritesheets.map(async (s) => {
+      const resolved =
+        skinPath && s.id === 0 ? skinPath : resolveRelative(dir, s.rawPath);
+      result.byId.set(s.id, resolved);
+      try {
+        result.sheets.set(s.id, (await getSheetDoc(resolved)).canvas);
+        result.paths.push(resolved);
+      } catch {
+        result.sheets.set(s.id, null);
+        result.missing.push(s.rawPath);
+      }
+    }),
+  );
+  return result;
 }
 
 export function subscribeSheet(path: string, cb: () => void): () => void {

@@ -5,12 +5,12 @@
 
 import type { WorkTab } from "../../app/store";
 import { frameBounds } from "../../lib/anm2/bounds";
+import { headAnimFor } from "../../lib/anm2/compose";
 import { parseAnm2 } from "../../lib/anm2/parse";
 import type { Anm2, Anm2Animation } from "../../lib/anm2/types";
 import { readText } from "../../lib/fsx/fs";
-import { dirname, resolveRelative } from "../../lib/fsx/resolve";
-import { getSheetDoc } from "../../lib/sheets/store";
-import { renderFrame, type SheetMap } from "../player/render";
+import { loadAnm2Sheets, type SheetMap } from "../../lib/sheets/store";
+import { renderFrame } from "../player/render";
 
 /** A costume overlay (hair/wings/fez) with its state animations matched. */
 export interface CostumePart {
@@ -41,63 +41,30 @@ export interface ThumbScene {
 const MAX_THUMB_ZOOM = 3;
 const scenes = new Map<string, Promise<ThumbScene | null>>();
 
-async function loadSheets(
-  anm2: Anm2,
-  anm2Path: string,
-  sheetPaths: string[],
-  skinPath?: string | null,
-): Promise<SheetMap> {
-  const dir = dirname(anm2Path);
-  const sheets: SheetMap = new Map();
-  await Promise.all(
-    anm2.content.spritesheets.map(async (s) => {
-      // Character tabs carry a skin sheet that replaces the player
-      // anm2's sheet 0 (all skins share its layout).
-      const path =
-        skinPath && s.id === 0 ? skinPath : resolveRelative(dir, s.rawPath);
-      try {
-        sheets.set(s.id, (await getSheetDoc(path)).canvas);
-        sheetPaths.push(path);
-      } catch {
-        sheets.set(s.id, null);
-      }
-    }),
-  );
-  return sheets;
-}
-
 async function load(tab: WorkTab): Promise<ThumbScene | null> {
   if (!tab.anm2Path) return null;
   try {
     const anm2 = parseAnm2(await readText(tab.anm2Path));
-    const sheetPaths: string[] = [];
-    const sheets = await loadSheets(
-      anm2,
-      tab.anm2Path,
-      sheetPaths,
-      tab.sheetPath,
-    );
+    const main = await loadAnm2Sheets(anm2, tab.anm2Path, tab.sheetPath);
+    const sheetPaths = [...main.paths];
     const anim =
       anm2.animations.find((a) => a.name === anm2.defaultAnimation) ??
       anm2.animations[0];
     if (!anim || anim.frameNum <= 0) return null;
 
     // Characters (skin override present): pair the body anim with its head.
-    const headAnim = tab.sheetPath
-      ? (anm2.animations.find(
-          (a) => a.name === anim.name.replace(/^Walk/, "Head"),
-        ) ?? null)
-      : null;
+    const headAnim = tab.sheetPath ? headAnimFor(anm2, anim) : null;
 
     // Signature costume (hair/wings): same state names, separate anm2.
     let costume: CostumePart | null = null;
     if (tab.costumeAnm2Path) {
       try {
         const cAnm2 = parseAnm2(await readText(tab.costumeAnm2Path));
-        const cSheets = await loadSheets(cAnm2, tab.costumeAnm2Path, sheetPaths);
+        const cLoaded = await loadAnm2Sheets(cAnm2, tab.costumeAnm2Path);
+        sheetPaths.push(...cLoaded.paths);
         costume = {
           anm2: cAnm2,
-          sheets: cSheets,
+          sheets: cLoaded.sheets,
           bodyAnim:
             cAnm2.animations.find((a) => a.name === anim.name) ?? null,
           headAnim: headAnim
@@ -115,7 +82,7 @@ async function load(tab: WorkTab): Promise<ThumbScene | null> {
       anim,
       headAnim,
       costume,
-      sheets,
+      sheets: main.sheets,
       fps: anm2.info.fps,
       sheetPaths,
     };
@@ -124,11 +91,18 @@ async function load(tab: WorkTab): Promise<ThumbScene | null> {
   }
 }
 
+/** Cache key covers everything that affects the render — a tab whose skin or
+ *  costume resolution changes (e.g. catalog fixes) must not reuse old scenes. */
+function sceneKey(tab: WorkTab): string {
+  return `${tab.anm2Path}|${tab.sheetPath ?? ""}|${tab.costumeAnm2Path ?? ""}`;
+}
+
 export function thumbScene(tab: WorkTab): Promise<ThumbScene | null> {
-  let p = scenes.get(tab.id);
+  const key = sceneKey(tab);
+  let p = scenes.get(key);
   if (!p) {
     p = load(tab);
-    scenes.set(tab.id, p);
+    scenes.set(key, p);
   }
   return p;
 }
