@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAppStore, type RailCategory } from "../../app/store";
+import { applyIsaacBranding } from "./isaacBranding";
 import {
   BoxIcon,
   CloseIcon,
@@ -49,8 +50,15 @@ export function AppShell() {
   const setSearchQuery = useAppStore((s) => s.setSearchQuery);
   const editing = useAppStore((s) => s.editing);
   const catalog = useAppStore((s) => s.catalog);
+  const paths = useAppStore((s) => s.paths);
+  const [logo, setLogo] = useState<string | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+
+  // Isaac thumbs-up as window icon + logo, rendered from local game files.
+  useEffect(() => {
+    if (paths) applyIsaacBranding(paths.gfxRoot).then(setLogo);
+  }, [paths]);
 
   // Ctrl+Tab cycles tabs (incl. Home), Ctrl+W closes the active one.
   useEffect(() => {
@@ -75,9 +83,13 @@ export function AppShell() {
   return (
     <div className="workbench">
       <header className="appbar">
-        <span className="app-logo" title="Basement Suite">
-          BS
-        </span>
+        {logo ? (
+          <img className="app-logo-img" src={logo} alt="" title="Basement Suite" />
+        ) : (
+          <span className="app-logo" title="Basement Suite">
+            BS
+          </span>
+        )}
         <nav className="tabstrip">
           <button
             className={`doc-tab${activeTabId === "home" ? " active" : ""}`}
