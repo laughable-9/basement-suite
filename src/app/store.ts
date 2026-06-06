@@ -77,9 +77,20 @@ interface AppState {
   toasts: Toast[];
   addToast: (text: string, kind: Toast["kind"]) => void;
   dismissToast: (id: number) => void;
+
+  /** Global animation playback speed multiplier (player + hover thumbnails) */
+  playbackSpeed: number;
+  setPlaybackSpeed: (speed: number) => void;
 }
 
 let nextToastId = 1;
+
+const SPEED_KEY = "bs:playbackSpeed";
+
+function initialSpeed(): number {
+  const stored = Number(localStorage.getItem(SPEED_KEY));
+  return Number.isFinite(stored) && stored >= 0.1 && stored <= 2 ? stored : 0.5;
+}
 
 export const useAppStore = create<AppState>((set) => ({
   paths: null,
@@ -126,6 +137,12 @@ export const useAppStore = create<AppState>((set) => ({
     set((s) => ({ toasts: [...s.toasts, { id: nextToastId++, text, kind }] })),
   dismissToast: (id) =>
     set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+
+  playbackSpeed: initialSpeed(),
+  setPlaybackSpeed: (speed) => {
+    localStorage.setItem(SPEED_KEY, String(speed));
+    set({ playbackSpeed: speed });
+  },
 }));
 
 /** Build a WorkTab from a catalog entry (absolutizing gfx-relative paths). */

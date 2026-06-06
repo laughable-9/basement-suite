@@ -50,6 +50,8 @@ export function AppShell() {
   const setSearchQuery = useAppStore((s) => s.setSearchQuery);
   const editing = useAppStore((s) => s.editing);
   const catalog = useAppStore((s) => s.catalog);
+  const playbackSpeed = useAppStore((s) => s.playbackSpeed);
+  const setPlaybackSpeed = useAppStore((s) => s.setPlaybackSpeed);
   const [logo, setLogo] = useState<string | null>(null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
@@ -169,6 +171,18 @@ export function AppShell() {
         </span>
         <span>{tabs.length} open</span>
         <span className="toolbar-spacer" />
+        <label className="speed-control" title="Animation playback speed (player + thumbnails)">
+          speed
+          <input
+            type="range"
+            min={0.1}
+            max={2}
+            step={0.1}
+            value={playbackSpeed}
+            onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
+          />
+          <span className="speed-value">{playbackSpeed.toFixed(1)}×</span>
+        </label>
         <span title="Last used mod folder">
           mod: {localStorage.getItem("bs:lastModName") ?? "—"}
         </span>

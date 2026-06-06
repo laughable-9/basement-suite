@@ -162,13 +162,16 @@ export function Player({
     setPlaying(false);
   }, [playerJump, loaded]);
 
-  // Playback clock: advance the playhead by elapsed wall time × fps.
+  const playbackSpeed = useAppStore((s) => s.playbackSpeed);
+
+  // Playback clock: advance the playhead by elapsed wall time × fps × speed.
   useEffect(() => {
     if (!playing || !loaded || !anim || anim.frameNum <= 0) return;
     let raf = 0;
     let last = performance.now();
     const step = (now: number) => {
-      const dt = ((now - last) / 1000) * loaded.anm2.info.fps;
+      const dt =
+        ((now - last) / 1000) * loaded.anm2.info.fps * playbackSpeed;
       last = now;
       setTick((t) => {
         const t2 = t + dt;
@@ -182,7 +185,7 @@ export function Player({
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [playing, loaded, anim]);
+  }, [playing, loaded, anim, playbackSpeed]);
 
   // Repaint on every playhead/zoom/animation change.
   useEffect(() => {
