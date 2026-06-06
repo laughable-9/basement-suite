@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { parseAnm2 } from "../../lib/anm2/parse";
 import { normalizeTime } from "../../lib/anm2/timeline";
 import type { Anm2, Anm2Animation } from "../../lib/anm2/types";
-import { pngUrl, readText } from "../../lib/fsx/fs";
+import { readText } from "../../lib/fsx/fs";
 import { dirname, resolveRelative } from "../../lib/fsx/resolve";
+import { getSheetDoc, subscribeSheet } from "../../lib/sheets/store";
 import { useAppStore } from "../../app/store";
 import { PauseIcon, PlayIcon } from "../../app/icons";
 import { renderFrame, type SheetMap } from "./render";
@@ -20,16 +21,6 @@ interface Loaded {
   missing: string[];
 }
 
-async function loadImage(path: string): Promise<HTMLImageElement> {
-  const url = await pngUrl(path);
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = url;
-  });
-}
-
 async function load(path: string): Promise<Loaded> {
   const anm2 = parseAnm2(await readText(path));
   const dir = dirname(path);
@@ -41,7 +32,9 @@ async function load(path: string): Promise<Loaded> {
       const resolved = resolveRelative(dir, s.rawPath);
       sheetPaths.set(s.id, resolved);
       try {
-        sheets.set(s.id, await loadImage(resolved));
+        // Shared sheet documents: the editor mutates these same canvases,
+        // so edits appear in playback immediately (live link).
+        sheets.set(s.id, (await getSheetDoc(resolved)).canvas);
       } catch {
         sheets.set(s.id, null);
         missing.push(s.rawPath);
@@ -60,7 +53,18 @@ export function Player({ path }: { path: string }) {
   const [playing, setPlaying] = useState(true);
   const [zoom, setZoom] = useState(4);
   const [tick, setTick] = useState(0); // continuous playhead, in ticks
+  // Bumped when the editor mutates a sheet, to repaint while paused.
+  const [sheetRev, setSheetRev] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Live link: repaint when any of this anm2's sheets is edited.
+  useEffect(() => {
+    if (!loaded) return;
+    const unsubs = [...loaded.sheetPaths.values()].map((p) =>
+      subscribeSheet(p, () => setSheetRev((r) => r + 1)),
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [loaded]);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,7 +145,7 @@ export function Player({ path }: { path: string }) {
     if (anim && anim.frameNum > 0) {
       renderFrame(ctx, loaded.anm2, anim, tick, loaded.sheets);
     }
-  }, [loaded, anim, tick, zoom]);
+  }, [loaded, anim, tick, zoom, sheetRev]);
 
   const selectAnim = useCallback((name: string) => {
     setAnimName(name);

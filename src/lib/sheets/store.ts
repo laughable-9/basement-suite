@@ -54,6 +54,13 @@ export function bumpSheet(doc: SheetDoc): void {
   listeners.get(doc.path)?.forEach((cb) => cb());
 }
 
+/** After a successful save: clear dirty and notify subscribers. */
+export function markSheetClean(doc: SheetDoc): void {
+  doc.version++;
+  doc.dirty = false;
+  listeners.get(doc.path)?.forEach((cb) => cb());
+}
+
 export function subscribeSheet(path: string, cb: () => void): () => void {
   let set = listeners.get(path);
   if (!set) {

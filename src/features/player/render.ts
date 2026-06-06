@@ -9,8 +9,11 @@ import {
   type ResolvedTransform,
 } from "../../lib/anm2/timeline";
 
-/** Spritesheet images by spritesheet id; null = file missing (raglich case). */
-export type SheetMap = Map<number, HTMLImageElement | null>;
+/**
+ * Spritesheet pixel sources by spritesheet id; null = file missing (raglich
+ * case). These are the same canvases the editor mutates (live link).
+ */
+export type SheetMap = Map<number, HTMLCanvasElement | null>;
 
 const IDENTITY: ResolvedTransform = {
   x: 0, y: 0, xScale: 100, yScale: 100, rotation: 0,
@@ -45,7 +48,7 @@ function isNeutral(tint: Rgba, offset: Rgb): boolean {
 
 /** Multiply RGB tint and add color offset onto the cropped sprite region. */
 function tintSprite(
-  sheet: HTMLImageElement,
+  sheet: HTMLCanvasElement,
   f: ResolvedLayerFrame,
   tint: Rgba,
   offset: Rgb,
