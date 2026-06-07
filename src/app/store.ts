@@ -103,6 +103,10 @@ interface AppState {
   playbackSpeed: number;
   setPlaybackSpeed: (speed: number) => void;
 
+  /** Last editor zoom level — shared with the diff viewer's default. */
+  lastEditorZoom: number;
+  setLastEditorZoom: (zoom: number) => void;
+
   /**
    * The mod whose files the resolver overlays into previews and where
    * Save-to-mod writes. v1 keeps a single active mod at a time.
@@ -117,6 +121,7 @@ let nextToastId = 1;
 const SPEED_KEY = "bs:playbackSpeed";
 const ACTIVE_MOD_KEY = "bs:activeMod";
 const LEGACY_MOD_KEY = "bs:lastModName";
+const EDITOR_ZOOM_KEY = "bs:lastEditorZoom";
 
 function initialSpeed(): number {
   const stored = Number(localStorage.getItem(SPEED_KEY));
@@ -128,6 +133,11 @@ function initialActiveMod(): string | null {
     localStorage.getItem(ACTIVE_MOD_KEY) ??
     localStorage.getItem(LEGACY_MOD_KEY)
   );
+}
+
+function initialEditorZoom(): number {
+  const stored = Number(localStorage.getItem(EDITOR_ZOOM_KEY));
+  return Number.isFinite(stored) && stored >= 1 && stored <= 32 ? stored : 8;
 }
 
 /** Reflect (paths, activeMod) into the file-resolver's overlay config. */
@@ -206,6 +216,12 @@ export const useAppStore = create<AppState>((set) => ({
   setPlaybackSpeed: (speed) => {
     localStorage.setItem(SPEED_KEY, String(speed));
     set({ playbackSpeed: speed });
+  },
+
+  lastEditorZoom: initialEditorZoom(),
+  setLastEditorZoom: (zoom) => {
+    localStorage.setItem(EDITOR_ZOOM_KEY, String(zoom));
+    set({ lastEditorZoom: zoom });
   },
 
   activeMod: initialActiveMod(),

@@ -118,7 +118,18 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   const [recent, setRecent] = useState<Rgba[]>([]);
   const [palette, setPalette] = useState<Rgba[] | null>(null);
   const [showGrid, setShowGrid] = useState(true);
-  const [zoom, setZoom] = useState(8);
+  // Initial zoom seeded from the last value the user set, so reopening the
+  // editor (or switching to the Mods diff viewer) keeps the same scale.
+  const initialZoom = useAppStore.getState().lastEditorZoom;
+  const setLastEditorZoom = useAppStore((s) => s.setLastEditorZoom);
+  const [zoom, setZoomState] = useState(initialZoom);
+  const setZoom = useCallback(
+    (z: number) => {
+      setZoomState(z);
+      setLastEditorZoom(z);
+    },
+    [setLastEditorZoom],
+  );
   const [floating, setFloating] = useState<Floating | null>(null);
   const [saveOpen, setSaveOpen] = useState(false);
   const [savedPath, setSavedPath] = useState<string | null>(null);
