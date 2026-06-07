@@ -100,13 +100,19 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
       if (!target.anm2Path) return;
       try {
         const anm2 = parseAnm2(await readText(target.anm2Path));
-        const dir = dirname(target.anm2Path);
-        const sheet = anm2.content.spritesheets.find(
-          (s) =>
-            resolveRelative(dir, s.rawPath).toLowerCase() ===
-            target.sheetPath.replace(/\\/g, "/").toLowerCase(),
-        );
-        if (sheet && !cancelled) setRects(cropGrid(anm2, sheet.id));
+        // Prefer the explicit sheet id (skin overrides never path-match);
+        // fall back to resolving the anm2's own sheet paths.
+        let sheetId = target.sheetId;
+        if (sheetId === undefined) {
+          const dir = dirname(target.anm2Path);
+          sheetId = anm2.content.spritesheets.find(
+            (s) =>
+              resolveRelative(dir, s.rawPath).toLowerCase() ===
+              target.sheetPath.replace(/\\/g, "/").toLowerCase(),
+          )?.id;
+        }
+        if (sheetId !== undefined && !cancelled)
+          setRects(cropGrid(anm2, sheetId));
       } catch {
         // Grid is optional decoration — a broken anm2 shouldn't kill the editor.
       }

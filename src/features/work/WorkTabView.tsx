@@ -43,6 +43,7 @@ function TabContent({ tab, active }: { tab: WorkTab; active: boolean }) {
                 setTabEditing(tab.id, {
                   sheetPath: tab.sheetPath!,
                   anm2Path: tab.anm2Path,
+                  sheetId: 0, // skins substitute spritesheet 0
                 })
               }
             >

@@ -341,6 +341,7 @@ export function Player({
                   setTabEditing(tabId, {
                     sheetPath: loaded.sheetPaths.get(s.id)!,
                     anm2Path: path,
+                    sheetId: s.id,
                   })
                 }
               >
@@ -364,6 +365,7 @@ export function Player({
                       setTabEditing(tabId, {
                         sheetPath: loaded.costume!.byId.get(s.id)!,
                         anm2Path: loaded.costume!.path,
+                        sheetId: s.id,
                       })
                     }
                   >

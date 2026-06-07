@@ -11,6 +11,12 @@ export interface EditingTarget {
   sheetPath: string;
   /** anm2 providing the crop-grid overlay, if opened from one */
   anm2Path: string | null;
+  /**
+   * Spritesheet id within that anm2. Required for character skins: the
+   * override sheet's path never appears in the anm2's own <Spritesheet>
+   * list (it substitutes id 0), so path-matching finds nothing.
+   */
+  sheetId?: number;
 }
 
 export interface PlayerJump {
