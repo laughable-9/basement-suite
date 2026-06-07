@@ -1,0 +1,87 @@
+# Release workflow.
+#
+# Fires only when a version tag like `v0.2.0` is pushed. Builds Basement
+# Suite on Windows, macOS (Intel + Apple Silicon), and Linux, then attaches
+# every installer to a single draft GitHub Release. The draft has to be
+# edited and published manually so release notes and the version number
+# get a human review before users see them.
+#
+# To cut a release: bump version in package.json + src-tauri/tauri.conf.json,
+# commit, then `git tag v0.2.0 && git push origin v0.2.0`. ~10 minutes
+# later the draft release appears at /releases.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Cache cargo registry + target
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libxdo-dev
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Basement Suite ${{ github.ref_name }}"
+          releaseBody: |
+            See the assets below to download.
+
+            Replace this body with proper release notes before publishing.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

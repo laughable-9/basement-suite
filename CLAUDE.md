@@ -48,3 +48,16 @@ The aesthetic target is **a professional Adobe Photoshop-style desktop tool, ded
 - `npm run build` — tsc type-check + Vite bundle (no Rust needed); `npm run tauri build` for the full installer
 
 Corpus-dependent test suites skip when `extractedResourcesPath` is unavailable (e.g. CI); pure-logic tests must run everywhere.
+
+## Releases
+
+Releases are **tag-driven**. The `.github/workflows/release.yml` workflow fires only on `v*` tag pushes — regular commits and PR merges to `main` produce nothing user-facing. Pushing a tag builds Windows (MSI + NSIS), macOS (Intel + Apple Silicon DMG), and Linux (AppImage + .deb) installers in parallel, runs the test suite first, then posts a **draft** GitHub release with every installer attached. Drafts stay invisible until a human edits the notes and clicks Publish.
+
+- Versioning follows [semver](https://semver.org/): `MAJOR.MINOR.PATCH`. While on `0.x` minor bumps may break things; once `v1.0.0` ships, breaking changes mean a major bump.
+- **Version is duplicated.** Bump both `package.json` and `src-tauri/tauri.conf.json` together (they must match) before tagging.
+- Release cadence: batch fixes, don't tag every commit. Typical small-project cadence is once every 1–2 weeks if there's anything worth shipping, otherwise skip.
+- Never tag from a red branch. CI must be green, `npm test` must pass, the packaged app must launch and the golden-path features must work.
+- Use pre-release tags (`v0.3.0-beta.1`) for risky / in-progress features — GitHub flags them and users know not to expect stability.
+- **Don't break config compatibility silently.** If `bs.config.json` schema changes, either migrate it transparently in code or bump the MAJOR version.
+
+To cut a release: bump the two version fields → commit → `git tag v0.2.0 && git push origin v0.2.0` → wait ~10 minutes → edit the draft notes on GitHub → Publish.
