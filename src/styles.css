@@ -1422,6 +1422,19 @@ body {
   opacity: 0.5;
 }
 
+.modal-btn-danger {
+  background: #8a3a2a;
+  border-color: #8a3a2a;
+}
+
+.modal-btn-danger:hover {
+  filter: brightness(1.15);
+}
+
+.mod-detail-delete {
+  color: #e08070 !important;
+}
+
 .toasts {
   position: fixed;
   bottom: 16px;

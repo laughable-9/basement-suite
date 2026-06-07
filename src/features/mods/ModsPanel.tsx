@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "../../app/store";
 import { listMods, type ModSummary } from "../../lib/mods/listMods";
 import type { ModFile } from "../../lib/mods/fileTree";
+import { deleteModFolder } from "../../lib/mods/deleteMod";
 import { DiffViewer } from "./DiffViewer";
 
 function fmtBytes(n: number): string {
@@ -17,6 +18,8 @@ function fmtBytes(n: number): string {
 export function ModsPanel() {
   const paths = useAppStore((s) => s.paths);
   const activeMod = useAppStore((s) => s.activeMod);
+  const setActiveMod = useAppStore((s) => s.setActiveMod);
+  const addToast = useAppStore((s) => s.addToast);
   // Switch requests go through AppShell so the dirty-prompt modal is one
   // shared component instead of two copies.
   const requestSwitch = (name: string) => {
@@ -28,6 +31,16 @@ export function ModsPanel() {
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [openFile, setOpenFile] = useState<ModFile | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ModSummary | null>(null);
+
+  const refresh = () => {
+    if (!paths) return;
+    setLoading(true);
+    listMods(paths.modsPath).then((list) => {
+      setMods(list);
+      setLoading(false);
+    });
+  };
 
   useEffect(() => {
     if (!paths) return;
@@ -104,6 +117,16 @@ export function ModsPanel() {
               mod={current}
               isActive={activeMod === current.folderName}
               onSetActive={() => requestSwitch(current.folderName)}
+              onDelete={() => setPendingDelete(current)}
+              onCopyPath={() => {
+                navigator.clipboard
+                  .writeText(current.path)
+                  .then(
+                    () =>
+                      addToast(`Copied path: ${current.path}`, "success"),
+                    () => addToast("Couldn't copy path", "error"),
+                  );
+              }}
               openFile={openFile}
               gfxRoot={paths.gfxRoot}
             />
@@ -114,6 +137,74 @@ export function ModsPanel() {
           <EmptyDetail />
         </section>
       )}
+      {pendingDelete && paths && (
+        <DeleteConfirmModal
+          mod={pendingDelete}
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={async () => {
+            const folder = pendingDelete;
+            setPendingDelete(null);
+            // If deleting the active mod, clear it first so the overlay
+            // doesn't stat a folder we're about to remove.
+            if (activeMod === folder.folderName) setActiveMod(null);
+            try {
+              await deleteModFolder(folder.path, paths.modsPath);
+              setSelected((s) => (s === folder.folderName ? null : s));
+              addToast(`Deleted "${folder.displayName}"`, "success");
+              refresh();
+            } catch (e) {
+              addToast(`Delete failed: ${e}`, "error");
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DeleteConfirmModal({
+  mod,
+  onConfirm,
+  onCancel,
+}: {
+  mod: ModSummary;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCancel();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Delete "{mod.displayName}"?</h2>
+        <p className="modal-note">
+          This hard-deletes the mod folder from disk. There is no undo.
+        </p>
+        <p className="modal-preview" title={mod.path}>
+          → {mod.path}
+        </p>
+        <p className="settings-note">
+          {mod.files.length} sprite{mod.files.length === 1 ? "" : "s"} will
+          be lost.
+        </p>
+        <div className="modal-actions">
+          <button className="player-btn modal-btn" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            className="player-btn modal-btn primary modal-btn-danger"
+            onClick={onConfirm}
+          >
+            Delete forever
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -196,12 +287,16 @@ function ModDetail({
   mod,
   isActive,
   onSetActive,
+  onDelete,
+  onCopyPath,
   openFile,
   gfxRoot,
 }: {
   mod: ModSummary;
   isActive: boolean;
   onSetActive: () => void;
+  onDelete: () => void;
+  onCopyPath: () => void;
   openFile: ModFile | null;
   gfxRoot: string;
 }) {
@@ -221,6 +316,20 @@ function ModDetail({
             }
           >
             {isActive ? "Active" : "Set as active"}
+          </button>
+          <button
+            className="edit-link"
+            onClick={onCopyPath}
+            title="Copy the mod folder path to the clipboard"
+          >
+            Copy path
+          </button>
+          <button
+            className="edit-link mod-detail-delete"
+            onClick={onDelete}
+            title="Delete this mod folder permanently"
+          >
+            Delete
           </button>
         </div>
         <div className="mod-detail-meta">
