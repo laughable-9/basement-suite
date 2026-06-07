@@ -1277,6 +1277,7 @@ body {
   min-height: 0;
 }
 
+/* Photoshop-style Layers panel. */
 .layers-panel {
   flex: 1;
   display: flex;
@@ -1285,11 +1286,64 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* History panel — sits below Layers. */
 .history-panel {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.history-row:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.history-row.active {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-left-color: var(--accent);
+}
+
+.history-row.future {
+  opacity: 0.55;
+}
+
+.history-row-step {
+  width: 22px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.history-row.active .history-row-step {
+  color: var(--accent);
+}
+
+.history-row-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .layers-add-btn {
@@ -1351,16 +1405,16 @@ body {
   color: var(--text);
 }
 
-.layer-row.active .layer-eye {
-  color: var(--text);
-}
-
 .layer-row.locked .layer-lock {
   color: var(--accent);
 }
 
 .layer-row.locked .layer-meta {
   opacity: 0.8;
+}
+
+.layer-row.active .layer-eye {
+  color: var(--text);
 }
 
 .layer-thumb {
@@ -1410,58 +1464,6 @@ body {
   width: 100%;
   height: 4px;
   accent-color: var(--accent);
-}
-
-.history-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: 0;
-  border-left: 2px solid transparent;
-  color: var(--text-dim);
-  font: inherit;
-  font-size: 12px;
-  padding: 3px 10px;
-  cursor: pointer;
-}
-
-.history-row:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.history-row.active {
-  background: var(--bg-hover);
-  color: var(--text);
-  border-left-color: var(--accent);
-}
-
-.history-row.future {
-  opacity: 0.55;
-}
-
-.history-row-step {
-  width: 22px;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
-
-.history-row.active .history-row-step {
-  color: var(--accent);
-}
-
-.history-row-label {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Vertical tool rail, icon-only */

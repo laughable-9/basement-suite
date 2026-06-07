@@ -1,14 +1,33 @@
 import { useEffect, useRef } from "react";
-import type { SheetDoc } from "../../lib/sheets/store";
+import {
+  activeLayer,
+  composite,
+  type SheetDoc,
+} from "../../lib/sheets/store";
 import { beginStroke, type StrokeRecorder } from "./history";
 import type { CropRect } from "./cropGrid";
 import type { Floating } from "./floating";
+import {
+  inSelection,
+  magicWand,
+  rectSelection,
+  translateSelection,
+  type Selection,
+} from "./selection";
 import type { Rgba } from "../../lib/anm2/types";
 
-export type Tool = "pencil" | "eraser" | "eyedropper" | "pan" | "inspect";
+export type Tool =
+  | "move"
+  | "brush"
+  | "eraser"
+  | "eyedropper"
+  | "marquee"
+  | "wand"
+  | "pan";
 
 const ZOOM_LEVELS = [1, 2, 3, 4, 6, 8, 12, 16, 24, 32];
 const HANDLE_HIT_PX = 9;
+type Edge = "n" | "s" | "e" | "w";
 
 export interface EditorCanvasProps {
   doc: SheetDoc;
@@ -28,6 +47,20 @@ export interface EditorCanvasProps {
   onFloatingChange: (f: Floating) => void;
   /** Click outside the floating rect = commit (Photoshop behavior) */
   onFloatingCommit: () => void;
+  /** Marquee/wand selection — clips paint and is what Ctrl+X/T act on. */
+  selection: Selection | null;
+  /** Mid-drag selection update — sets doc.selection but doesn't record. */
+  onSelectionPreview: (sel: Selection | null) => void;
+  /** Final selection state — records as a single history entry. */
+  onSelectionCommit: (sel: Selection | null, label: string) => void;
+  /** Magic-wand tolerance, 0–255. */
+  wandTolerance: number;
+  /** Alt+drag on the canvas with a selection → duplicate via Floating. */
+  onAltDragSelection: () => void;
+  /** Move tool gesture — host turns the active layer / selection into a
+   *  floating piece synchronously and returns the click offset so this
+   *  component can immediately start tracking the drag. */
+  onMoveStart: (docX: number, docY: number) => void;
 }
 
 type Corner = 0 | 1 | 2 | 3; // TL TR BL BR
@@ -40,6 +73,12 @@ interface ScaleDrag {
   origH: number;
 }
 
+interface EdgeDrag {
+  edge: Edge;
+  /** Coordinate of the opposite edge in doc space (stays fixed during drag). */
+  anchor: number;
+}
+
 interface Pointer {
   panning: boolean;
   stroke: StrokeRecorder | null;
@@ -47,6 +86,15 @@ interface Pointer {
   lastScreen: { x: number; y: number };
   floatMove: { dx: number; dy: number } | null;
   floatScale: ScaleDrag | null;
+  floatEdge: EdgeDrag | null;
+  /** Marquee anchor (doc-space) while the user drags out a NEW rect. */
+  marqueeAnchor: { x: number; y: number } | null;
+  /** Inside-drag of an existing marquee — translates the outline only. */
+  marqueeMove: {
+    startSel: Selection;
+    startX: number;
+    startY: number;
+  } | null;
 }
 
 export function EditorCanvas(props: EditorCanvasProps) {
@@ -65,6 +113,9 @@ export function EditorCanvas(props: EditorCanvasProps) {
     lastScreen: { x: 0, y: 0 },
     floatMove: null,
     floatScale: null,
+    floatEdge: null,
+    marqueeAnchor: null,
+    marqueeMove: null,
   });
   const spaceRef = useRef(false);
   // Preview buffer for the floating image, downsampled to its doc rect so the
@@ -119,6 +170,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         tool,
         brushSize,
         floating,
+        selection,
       } = propsRef.current;
       const pan = panRef.current;
       const ctx = canvas.getContext("2d")!;
@@ -180,9 +232,42 @@ export function EditorCanvas(props: EditorCanvasProps) {
         drawFloating(ctx, floating, pan, zoom);
       }
 
+      // Selection outline (marching ants). For masked selections we still
+      // show the bbox rect — the mask itself is enforced on paint ops.
+      if (selection) {
+        const b = selection.bounds;
+        const sx = pan.x + b.x * zoom;
+        const sy = pan.y + b.y * zoom;
+        const sw = b.w * zoom;
+        const sh = b.h * zoom;
+        const phase = (performance.now() / 80) % 8;
+        // Black underlay
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#000";
+        ctx.setLineDash([4, 4]);
+        ctx.lineDashOffset = -phase;
+        ctx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
+        // White ants on top, offset half a dash so the eye sees alternation
+        ctx.strokeStyle = "#fff";
+        ctx.lineDashOffset = -phase + 4;
+        ctx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
+        ctx.setLineDash([]);
+        // If wand mask, tint the selected region so the user knows the
+        // ants outline a bbox, not the actual shape.
+        if (selection.mask) {
+          ctx.save();
+          ctx.globalAlpha = 0.18;
+          ctx.fillStyle = "#7ab8ff";
+          ctx.translate(pan.x, pan.y);
+          ctx.scale(zoom, zoom);
+          ctx.drawImage(selection.mask, 0, 0);
+          ctx.restore();
+        }
+      }
+
       // Brush footprint preview
       const hover = hoverRef.current;
-      if (hover && !floating && (tool === "pencil" || tool === "eraser")) {
+      if (hover && !floating && (tool === "brush" || tool === "eraser")) {
         const o = Math.floor((brushSize - 1) / 2);
         ctx.strokeStyle = "rgba(255,255,255,0.8)";
         ctx.strokeRect(
@@ -230,13 +315,17 @@ export function EditorCanvas(props: EditorCanvasProps) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(prev, 0, 0, w, h, sx, sy, sw, sh);
 
-    // Dashed outline + corner handles
+    // Dashed outline + handles (4 corners for uniform scale + 4 edge
+    // midpoints for axis-locked scaling).
     ctx.strokeStyle = "#7ab8ff";
     ctx.setLineDash([5, 4]);
     ctx.strokeRect(sx + 0.5, sy + 0.5, sw - 1, sh - 1);
     ctx.setLineDash([]);
     ctx.fillStyle = "#7ab8ff";
     for (const [cx, cy] of cornerPoints(f, pan, zoom)) {
+      ctx.fillRect(cx - 3, cy - 3, 6, 6);
+    }
+    for (const [cx, cy] of edgePoints(f, pan, zoom)) {
       ctx.fillRect(cx - 3, cy - 3, 6, 6);
     }
   }
@@ -255,6 +344,26 @@ export function EditorCanvas(props: EditorCanvasProps) {
       [x1, y0],
       [x0, y1],
       [x1, y1],
+    ];
+  }
+
+  /** [N, S, W, E] in screen coords — midpoints of each edge. */
+  function edgePoints(
+    f: Floating,
+    pan: { x: number; y: number },
+    zoom: number,
+  ): [number, number][] {
+    const cx = pan.x + (f.x + f.w / 2) * zoom;
+    const cy = pan.y + (f.y + f.h / 2) * zoom;
+    const x0 = pan.x + f.x * zoom;
+    const y0 = pan.y + f.y * zoom;
+    const x1 = pan.x + (f.x + f.w) * zoom;
+    const y1 = pan.y + (f.y + f.h) * zoom;
+    return [
+      [cx, y0], // N
+      [cx, y1], // S
+      [x0, cy], // W
+      [x1, cy], // E
     ];
   }
 
@@ -300,17 +409,26 @@ export function EditorCanvas(props: EditorCanvasProps) {
   }
 
   function paint(p: { x: number; y: number }): void {
-    const { doc, tool, brushSize, color } = propsRef.current;
+    const { doc, tool, brushSize, color, selection } = propsRef.current;
+    const layer = activeLayer(doc);
+    if (layer.locked) return; // locked layers reject paint
+    // Center-point selection check: cheap and good enough for 1–3px brushes.
+    // For bigger brushes user can use full-sheet ops.
+    if (!inSelection(selection, p.x, p.y)) return;
     const o = Math.floor((brushSize - 1) / 2);
     const x = p.x - o;
     const y = p.y - o;
+    const ctx = layer.ctx;
     // Replace semantics (no blending): clear then fill — predictable pixels.
-    doc.ctx.clearRect(x, y, brushSize, brushSize);
-    if (tool === "pencil" && color.a > 0) {
-      doc.ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${color.a / 255})`;
-      doc.ctx.fillRect(x, y, brushSize, brushSize);
+    ctx.clearRect(x, y, brushSize, brushSize);
+    if (tool === "brush" && color.a > 0) {
+      ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${color.a / 255})`;
+      ctx.fillRect(x, y, brushSize, brushSize);
     }
     pointerRef.current.stroke?.touch(x, y, brushSize, brushSize);
+    // Mid-stroke composite so the user sees pixels appear while painting.
+    // Cheap on the typical 512×512 sheet; stroke commit composites once more.
+    composite(doc);
   }
 
   /** Bresenham between consecutive pointer samples so fast strokes stay solid. */
@@ -349,9 +467,15 @@ export function EditorCanvas(props: EditorCanvasProps) {
   function floatingHit(
     e: React.PointerEvent,
     f: Floating,
-  ): { kind: "corner"; corner: Corner } | { kind: "inside" } | null {
+  ):
+    | { kind: "corner"; corner: Corner }
+    | { kind: "edge"; edge: Edge }
+    | { kind: "inside" }
+    | null {
     const s = toScreen(e);
     const { zoom } = propsRef.current;
+    // Corners first — they sit at edge-handle locations too, so corners
+    // win when both could hit the same screen point.
     const corners = cornerPoints(f, panRef.current, zoom);
     for (let i = 0; i < 4; i++) {
       if (
@@ -359,6 +483,16 @@ export function EditorCanvas(props: EditorCanvasProps) {
         Math.abs(s.y - corners[i][1]) <= HANDLE_HIT_PX
       ) {
         return { kind: "corner", corner: i as Corner };
+      }
+    }
+    const edges = edgePoints(f, panRef.current, zoom);
+    const edgeNames: Edge[] = ["n", "s", "w", "e"];
+    for (let i = 0; i < 4; i++) {
+      if (
+        Math.abs(s.x - edges[i][0]) <= HANDLE_HIT_PX &&
+        Math.abs(s.y - edges[i][1]) <= HANDLE_HIT_PX
+      ) {
+        return { kind: "edge", edge: edgeNames[i] };
       }
     }
     const p = toDocF(e);
@@ -402,6 +536,15 @@ export function EditorCanvas(props: EditorCanvasProps) {
           origW: floating.w,
           origH: floating.h,
         };
+      } else if (hit.kind === "edge") {
+        // The opposite edge stays put — drag the active edge along one axis.
+        const anchors: Record<Edge, number> = {
+          n: floating.y + floating.h,
+          s: floating.y,
+          w: floating.x + floating.w,
+          e: floating.x,
+        };
+        ptr.floatEdge = { edge: hit.edge, anchor: anchors[hit.edge] };
       } else {
         const p = toDocF(e);
         ptr.floatMove = { dx: p.x - floating.x, dy: p.y - floating.y };
@@ -410,7 +553,38 @@ export function EditorCanvas(props: EditorCanvasProps) {
     }
 
     const p = toDoc(e);
-    if (tool === "inspect" || e.altKey) {
+
+    // Alt+drag with an active selection → duplicate it as a floating piece.
+    // Delegated to the host (Editor) which knows how to set the floating
+    // state without rummaging in our refs.
+    const {
+      selection,
+      wandTolerance,
+      onSelectionPreview,
+      onSelectionCommit,
+      onAltDragSelection,
+      onMoveStart,
+    } = propsRef.current;
+    if (e.altKey && selection && inBounds(p) && inSelection(selection, p.x, p.y)) {
+      onAltDragSelection();
+      return;
+    }
+
+    // Move tool — pick up the active layer / selection and float-drag it.
+    if (tool === "move") {
+      if (inBounds(p) && !e.altKey) {
+        onMoveStart(p.x, p.y);
+        // After onMoveStart, the host has set floating; arm floatMove so
+        // pointermove drags it immediately on the same gesture.
+        // We use a 1-tick deferral via the next propsRef snapshot.
+        const f = propsRef.current.floating;
+        if (f) ptr.floatMove = { dx: p.x - f.x, dy: p.y - f.y };
+        return;
+      }
+      if (inBounds(p)) jumpAt(p); // Alt-click still jumps the player
+      return;
+    }
+    if (e.altKey) {
       if (inBounds(p)) jumpAt(p);
       return;
     }
@@ -418,7 +592,39 @@ export function EditorCanvas(props: EditorCanvasProps) {
       if (inBounds(p)) pickColor(p);
       return;
     }
-    ptr.stroke = beginStroke(doc);
+
+    // Marquee: inside an existing selection → translate the outline only
+    // (Photoshop's "move marquee" gesture). Outside → start a new rect.
+    if (tool === "marquee") {
+      if (!inBounds(p)) {
+        onSelectionCommit(null, "Deselect");
+        return;
+      }
+      if (selection && inSelection(selection, p.x, p.y)) {
+        ptr.marqueeMove = { startSel: selection, startX: p.x, startY: p.y };
+      } else {
+        ptr.marqueeAnchor = p;
+        onSelectionPreview(rectSelection({ x: p.x, y: p.y, w: 1, h: 1 }));
+      }
+      return;
+    }
+
+    // Magic wand: flood-fill on the active layer.
+    if (tool === "wand") {
+      if (!inBounds(p)) {
+        onSelectionCommit(null, "Deselect");
+        return;
+      }
+      const sel = magicWand(activeLayer(doc), p.x, p.y, wandTolerance);
+      onSelectionCommit(sel, "Magic wand");
+      return;
+    }
+
+    if (activeLayer(doc).locked) return; // locked layers reject paint
+    ptr.stroke = beginStroke(
+      doc,
+      tool === "eraser" ? "Eraser" : "Brush",
+    );
     ptr.lastDoc = p;
     if (inBounds(p)) paint(p);
   }
@@ -462,6 +668,38 @@ export function EditorCanvas(props: EditorCanvasProps) {
       });
       return;
     }
+    if (floating && ptr.floatEdge) {
+      const pf = toDocF(e);
+      const d = ptr.floatEdge;
+      // Axis-only scale anchored on the opposite edge; doesn't preserve
+      // aspect. Stretch / squash along one direction.
+      if (d.edge === "n" || d.edge === "s") {
+        const h = Math.max(0.5, Math.abs(pf.y - d.anchor));
+        const y = pf.y < d.anchor ? d.anchor - h : d.anchor;
+        onFloatingChange({ ...floating, y, h });
+      } else {
+        const w = Math.max(0.5, Math.abs(pf.x - d.anchor));
+        const x = pf.x < d.anchor ? d.anchor - w : d.anchor;
+        onFloatingChange({ ...floating, x, w });
+      }
+      return;
+    }
+    if (ptr.marqueeAnchor) {
+      const a = ptr.marqueeAnchor;
+      const x = Math.min(a.x, p.x);
+      const y = Math.min(a.y, p.y);
+      const w = Math.abs(p.x - a.x) + 1;
+      const h = Math.abs(p.y - a.y) + 1;
+      propsRef.current.onSelectionPreview(rectSelection({ x, y, w, h }));
+      return;
+    }
+    if (ptr.marqueeMove) {
+      const { startSel, startX, startY } = ptr.marqueeMove;
+      propsRef.current.onSelectionPreview(
+        translateSelection(startSel, p.x - startX, p.y - startY),
+      );
+      return;
+    }
     if (ptr.stroke && ptr.lastDoc) {
       paintLine(ptr.lastDoc, p);
       ptr.lastDoc = p;
@@ -471,8 +709,34 @@ export function EditorCanvas(props: EditorCanvasProps) {
   function onPointerUp() {
     const ptr = pointerRef.current;
     ptr.panning = false;
+    // Move tool: on release, commit the floating to the active layer.
+    if (
+      propsRef.current.tool === "move" &&
+      propsRef.current.floating &&
+      ptr.floatMove
+    ) {
+      propsRef.current.onFloatingCommit();
+    }
     ptr.floatMove = null;
     ptr.floatScale = null;
+    ptr.floatEdge = null;
+    if (ptr.marqueeAnchor) {
+      const sel = propsRef.current.selection;
+      if (sel && sel.bounds.w <= 1 && sel.bounds.h <= 1) {
+        // Zero-area drag = deselect.
+        propsRef.current.onSelectionCommit(null, "Deselect");
+      } else if (sel) {
+        propsRef.current.onSelectionCommit(sel, "Rectangle marquee");
+      }
+      ptr.marqueeAnchor = null;
+    }
+    if (ptr.marqueeMove) {
+      propsRef.current.onSelectionCommit(
+        propsRef.current.selection,
+        "Move marquee",
+      );
+      ptr.marqueeMove = null;
+    }
     if (ptr.stroke) {
       ptr.stroke.commit();
       ptr.stroke = null;
@@ -504,9 +768,11 @@ export function EditorCanvas(props: EditorCanvasProps) {
       ? "grab"
       : props.floating
         ? "move"
-        : props.tool === "inspect"
-          ? "default"
-          : "crosshair";
+        : props.tool === "move"
+          ? "move"
+          : props.tool === "wand"
+            ? "default"
+            : "crosshair";
 
   return (
     <div ref={wrapRef} className="editor-canvas-wrap checkerboard">

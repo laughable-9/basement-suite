@@ -10,25 +10,38 @@ import {
 } from "../../lib/sheets/store";
 import { useAppStore, type EditingTarget } from "../../app/store";
 import { cropGrid, type CropRect } from "./cropGrid";
-import { canRedo, canUndo, redo, undo } from "./history";
+import { beginStroke, canRedo, canUndo, redo, undo } from "./history";
 import { commitFloating, makeFloating, type Floating } from "./floating";
 import { extractPalette } from "./palette";
 import { SaveToModDialog } from "../export/SaveToModDialog";
 import { EditorCanvas, type Tool } from "./EditorCanvas";
 import { findSharedSheetInfo } from "./sharedSheet";
 import { rectAtFrame } from "./rectAtFrame";
+import { LayersPanel } from "./LayersPanel";
+import { HistoryPanel } from "./HistoryPanel";
 import {
+  BrushIcon,
   CloseIcon,
-  CursorIcon,
   DropperIcon,
   EraserIcon,
   GridIcon,
+  MarqueeIcon,
   MoveIcon,
+  MoveToolIcon,
   PaletteIcon,
-  PencilIcon,
   RedoIcon,
+  TransformIcon,
   UndoIcon,
+  WandIcon,
 } from "../../app/icons";
+import {
+  clearSelection,
+  extractSelection,
+  layerContentBounds,
+  type Selection,
+} from "./selection";
+import { activeLayer, previewSelection } from "../../lib/sheets/store";
+import { recordSelection } from "./history";
 
 const BRUSH_MIN = 1;
 const BRUSH_MAX = 64;
@@ -59,11 +72,13 @@ const TOOLS: {
   tip: string;
   label: string;
 }[] = [
-  { id: "pencil",     icon: PencilIcon,  tip: "Pencil (B)",     label: "Pencil" },
-  { id: "eraser",     icon: EraserIcon,  tip: "Eraser (E)",     label: "Eraser" },
-  { id: "eyedropper", icon: DropperIcon, tip: "Eyedropper (I)", label: "Eyedropper" },
-  { id: "pan",        icon: MoveIcon,    tip: "Pan view (H, or hold Space / middle-drag)", label: "Pan" },
-  { id: "inspect",    icon: CursorIcon,  tip: "Inspect — click a frame rect to jump the player (V)", label: "Inspect" },
+  { id: "move",       icon: MoveToolIcon, tip: "Move (V) — drag layer contents; Alt+click jumps the player to a frame rect", label: "Move" },
+  { id: "brush",      icon: BrushIcon,    tip: "Brush (B)",      label: "Brush" },
+  { id: "eraser",     icon: EraserIcon,   tip: "Eraser (E)",     label: "Eraser" },
+  { id: "eyedropper", icon: DropperIcon,  tip: "Eyedropper (I)", label: "Eyedropper" },
+  { id: "marquee",    icon: MarqueeIcon,  tip: "Rectangle marquee (M) — drag to select, inside-drag moves the outline, Ctrl+T transform, Alt+drag duplicate, Ctrl+X clear, Ctrl+D deselect", label: "Marquee" },
+  { id: "wand",       icon: WandIcon,     tip: "Magic wand (W) — tolerance in the options strip", label: "Magic wand" },
+  { id: "pan",        icon: MoveIcon,     tip: "Pan view (H, or hold Space / middle-drag)", label: "Pan" },
 ];
 
 const TOOL_LABEL: Record<Tool, string> = Object.fromEntries(
@@ -112,12 +127,21 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   } | null>(null);
   // Highlighted rect (from a frame-strip click); auto-clears after ~1.4s.
   const [highlightRect, setHighlightRect] = useState<CropRect | null>(null);
-  const [tool, setTool] = useState<Tool>("pencil");
+  const [tool, setTool] = useState<Tool>("move");
   const [brushSize, setBrushSize] = useState(1);
   const [color, setColor] = useState<Rgba>({ r: 255, g: 255, b: 255, a: 255 });
   const [recent, setRecent] = useState<Rgba[]>([]);
   const [palette, setPalette] = useState<Rgba[] | null>(null);
   const [showGrid, setShowGrid] = useState(true);
+  // Selection lives on the doc (so history can undo/redo it); subscribe to
+  // sheet bumps to mirror the latest value.
+  const [, setSelRev] = useState(0);
+  useEffect(() => {
+    if (!doc) return;
+    return subscribeSheet(doc.path, () => setSelRev((r) => r + 1));
+  }, [doc]);
+  const selection: Selection | null = doc?.selection ?? null;
+  const [wandTolerance, setWandTolerance] = useState(32);
   // Initial zoom seeded from the last value the user set, so reopening the
   // editor (or switching to the Mods diff viewer) keeps the same scale.
   const initialZoom = useAppStore.getState().lastEditorZoom;
@@ -217,7 +241,7 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
 
   const onPick = useCallback((c: Rgba) => {
     setColor(c);
-    setTool("pencil");
+    setTool("brush");
   }, []);
 
   const onJump = useCallback(
@@ -236,6 +260,113 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
     setFloating(null);
   }, [floating]);
 
+  /** Lift the selection's pixels off the active layer into a Floating. */
+  const beginTransform = useCallback(
+    async (sel: Selection, cut: boolean, label = "Transform") => {
+      if (!doc) return;
+      if (activeLayer(doc).locked) return;
+      let canvas: HTMLCanvasElement;
+      if (cut) {
+        const rec = beginStroke(doc, label);
+        rec.touch(sel.bounds.x, sel.bounds.y, sel.bounds.w, sel.bounds.h);
+        canvas = extractSelection(doc, sel, true);
+        rec.commit();
+      } else {
+        canvas = extractSelection(doc, sel, false);
+      }
+      const bitmap = await createImageBitmap(canvas);
+      floating?.source.close();
+      setFloating({
+        source: bitmap,
+        x: sel.bounds.x,
+        y: sel.bounds.y,
+        w: sel.bounds.w,
+        h: sel.bounds.h,
+      });
+      // Drop the marquee outline; user re-selects after committing.
+      recordSelection(doc, "Deselect", null);
+      setTool("move");
+    },
+    [doc, floating],
+  );
+
+  /** Ctrl+T — uses the active selection, or falls back to the active
+   *  layer's tight content bbox when none is selected. */
+  const triggerTransform = useCallback(() => {
+    if (!doc) return;
+    if (activeLayer(doc).locked) return;
+    if (selection) {
+      void beginTransform(selection, true);
+      return;
+    }
+    const bounds = layerContentBounds(activeLayer(doc));
+    if (!bounds) return;
+    void beginTransform({ bounds, mask: null }, true);
+  }, [doc, selection, beginTransform]);
+
+  /** Ctrl+X / Delete — clears the selection if present, else the layer. */
+  const triggerClear = useCallback(() => {
+    if (!doc) return;
+    if (activeLayer(doc).locked) return;
+    if (selection) {
+      const rec = beginStroke(doc, "Clear selection");
+      rec.touch(
+        selection.bounds.x,
+        selection.bounds.y,
+        selection.bounds.w,
+        selection.bounds.h,
+      );
+      clearSelection(doc, selection);
+      rec.commit();
+      recordSelection(doc, "Deselect", null);
+      return;
+    }
+    const layer = activeLayer(doc);
+    const rec = beginStroke(doc, "Clear layer");
+    rec.touch(0, 0, layer.canvas.width, layer.canvas.height);
+    layer.ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+    rec.commit();
+  }, [doc, selection]);
+
+  const onAltDragSelection = useCallback(() => {
+    if (!doc || !selection) return;
+    void beginTransform(selection, false, "Duplicate");
+  }, [doc, selection, beginTransform]);
+
+  /** Move tool click — pick up the selection or the layer's content and
+   *  attach it to the floating system so the user can drag it. */
+  const onMoveStart = useCallback(() => {
+    if (!doc) return;
+    if (activeLayer(doc).locked) return;
+    const sel: Selection = selection ?? {
+      bounds: layerContentBounds(activeLayer(doc)) ?? {
+        x: 0,
+        y: 0,
+        w: 0,
+        h: 0,
+      },
+      mask: null,
+    };
+    if (sel.bounds.w <= 0 || sel.bounds.h <= 0) return;
+    void beginTransform(sel, true, "Move");
+  }, [doc, selection, beginTransform]);
+
+  const onSelectionPreview = useCallback(
+    (sel: Selection | null) => {
+      if (!doc) return;
+      previewSelection(doc, sel);
+    },
+    [doc],
+  );
+
+  const onSelectionCommit = useCallback(
+    (sel: Selection | null, label: string) => {
+      if (!doc) return;
+      recordSelection(doc, label, sel);
+    },
+    [doc],
+  );
+
   // Ctrl+V: paste an image as a floating object (committed on Enter).
   // Active-gated so a paste lands only in the visible tab's editor.
   useEffect(() => {
@@ -251,7 +382,7 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
       const bitmap = await createImageBitmap(file);
       floating?.source.close(); // replace any previous floating paste
       setFloating(makeFloating(bitmap, doc));
-      setTool("inspect");
+      setTool("move");
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
@@ -282,13 +413,33 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
       } else if (e.ctrlKey && e.key.toLowerCase() === "y") {
         e.preventDefault();
         redo(doc);
+      } else if (e.ctrlKey && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        triggerTransform();
+      } else if (e.ctrlKey && e.key.toLowerCase() === "x") {
+        e.preventDefault();
+        triggerClear();
+      } else if (e.ctrlKey && e.key.toLowerCase() === "d") {
+        // Photoshop deselect.
+        e.preventDefault();
+        if (selection) recordSelection(doc, "Deselect", null);
+      } else if (
+        !e.ctrlKey &&
+        (e.key === "Delete" || e.key === "Backspace")
+      ) {
+        e.preventDefault();
+        triggerClear();
       } else if (!e.ctrlKey) {
-        if (e.key === "b" || e.key === "p") setTool("pencil");
+        if (e.key === "v") setTool("move");
+        else if (e.key === "b") setTool("brush");
         else if (e.key === "e") setTool("eraser");
         else if (e.key === "i") setTool("eyedropper");
+        else if (e.key === "m") setTool("marquee");
+        else if (e.key === "w") setTool("wand");
         else if (e.key === "h") setTool("pan");
-        else if (e.key === "v") setTool("inspect");
         else if (e.key === "g") setShowGrid((s) => !s);
+        else if (e.key === "Escape" && selection)
+          recordSelection(doc, "Deselect", null);
         else if (e.key === "[")
           setBrushSize((s) => Math.max(BRUSH_MIN, s - 1));
         else if (e.key === "]")
@@ -297,7 +448,16 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doc, floating, stampFloating, cancelFloating, active]);
+  }, [
+    doc,
+    floating,
+    stampFloating,
+    cancelFloating,
+    active,
+    selection,
+    triggerTransform,
+    triggerClear,
+  ]);
 
   const fileName = useMemo(
     () => target.sheetPath.split(/[\\/]/).pop() ?? target.sheetPath,
@@ -307,7 +467,7 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   if (error) return <div className="detail-error">{error}</div>;
   if (!doc) return <div className="detail-empty">Loading sheet…</div>;
 
-  const showBrushOptions = tool === "pencil" || tool === "eraser";
+  const showBrushOptions = tool === "brush" || tool === "eraser";
 
   return (
     <div className="editor">
@@ -374,7 +534,7 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
               />
               px <span className="opt-kbd">[ ]</span>
             </label>
-            {tool === "pencil" && (
+            {tool === "brush" && (
               <>
                 <span className="opt-sep" />
                 <label className="opt">
@@ -453,10 +613,52 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
         {!floating && tool === "pan" && (
           <span className="opt-hint">Drag to pan the view</span>
         )}
-        {!floating && tool === "inspect" && (
+        {!floating && tool === "move" && (
           <span className="opt-hint">
-            Click a green frame rect to jump the player · Ctrl+V pastes an image
+            Drag layer content to reposition · Alt+click a frame rect jumps
+            the player · Ctrl+V pastes an image
           </span>
+        )}
+        {!floating && tool === "marquee" && (
+          <span className="opt-hint">
+            Drag a rectangle to select · Ctrl+T transform · Ctrl+X / Delete
+            clear · Alt+drag inside duplicates · Esc deselects
+          </span>
+        )}
+        {!floating && tool === "wand" && (
+          <>
+            <label className="opt">
+              Tolerance
+              <input
+                type="range"
+                min={0}
+                max={120}
+                value={wandTolerance}
+                onChange={(e) => setWandTolerance(Number(e.target.value))}
+              />
+              <span className="opt-num">{wandTolerance}</span>
+            </label>
+            <span className="opt-sep" />
+            <span className="opt-hint">
+              Click to select connected pixels of similar colour
+            </span>
+          </>
+        )}
+        {!floating && (
+          <>
+            <span className="opt-sep" />
+            <button
+              className="rail-btn opt-icon-btn"
+              title={
+                selection
+                  ? "Free Transform selection (Ctrl+T)"
+                  : "Free Transform — uses the active layer's content"
+              }
+              onClick={triggerTransform}
+            >
+              <TransformIcon />
+            </button>
+          </>
         )}
       </div>
 
@@ -549,11 +751,21 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
             floating={floating}
             onFloatingChange={setFloating}
             onFloatingCommit={stampFloating}
+            selection={selection}
+            onSelectionPreview={onSelectionPreview}
+            onSelectionCommit={onSelectionCommit}
+            wandTolerance={wandTolerance}
+            onAltDragSelection={onAltDragSelection}
+            onMoveStart={onMoveStart}
           />
           <div className="editor-hint">
             wheel zoom · space / middle-drag pan · [ ] brush size · Ctrl+V
             paste image · Ctrl+S save to mod · Alt+click rect jumps player
           </div>
+        </div>
+        <div className="editor-panels">
+          <LayersPanel doc={doc} />
+          <HistoryPanel doc={doc} />
         </div>
       </div>
       {saveOpen && (
