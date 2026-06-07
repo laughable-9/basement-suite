@@ -99,17 +99,23 @@ function renderNode(node: Node, key: string): ReactNode {
     case "h2":
       return <h3 key={k}>{renderChildren(node.children, k)}</h3>;
     case "url": {
-      // [url=...]label[/url] or [url]href[/url]
+      // [url=...]label[/url] or [url]href[/url]. Tauri's CSP is null,
+      // so an unvalidated href accepting javascript: / data: would let a
+      // malicious Workshop description run code on click — gate to http(s).
       const inner = node.children;
       const labelText = inner
         .map((c) => (typeof c === "string" ? c : ""))
         .join("");
-      const href = node.value ?? labelText;
+      const href = (node.value ?? labelText).trim();
+      const isLabelEmpty =
+        inner.length === 0 ||
+        (inner.length === 1 && typeof inner[0] === "string" && !inner[0].trim());
+      if (!/^https?:\/\//i.test(href)) {
+        return <span key={k}>{isLabelEmpty ? href : renderChildren(inner, k)}</span>;
+      }
       return (
         <a key={k} href={href} target="_blank" rel="noopener noreferrer">
-          {inner.length === 0 || (inner.length === 1 && typeof inner[0] === "string" && !inner[0].trim())
-            ? href
-            : renderChildren(inner, k)}
+          {isLabelEmpty ? href : renderChildren(inner, k)}
         </a>
       );
     }
