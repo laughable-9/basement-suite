@@ -254,6 +254,31 @@ export function Player({
     setPlaying(false);
   }, [playerJump, loaded]);
 
+  // Space toggles play/pause on the active player. Bound only when no editor
+  // is open in this tab — the editor reserves Space for its pan modifier.
+  // tick is read through a ref so the handler doesn't rebind 30+ times a
+  // second during playback.
+  const tickRef = useRef(tick);
+  tickRef.current = tick;
+  useEffect(() => {
+    if (!active || compact) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      const target = e.target as HTMLElement | null;
+      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+      if (target?.isContentEditable) return;
+      e.preventDefault();
+      if (!anim || anim.frameNum <= 0) return;
+      setPlaying((p) => {
+        // From end-of-anim, replay from the start; otherwise just toggle.
+        if (!p && tickRef.current >= anim.frameNum - 1e-6) setTick(0);
+        return !p;
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, compact, anim]);
+
   const playbackSpeed = useAppStore((s) => s.playbackSpeed);
 
   // Whole-timeline bounds → stable fit zoom + centering across playback.
@@ -467,7 +492,7 @@ export function Player({
           setPlaying(!playing);
         }}
         disabled={!anim || anim.frameNum <= 0}
-        title={playing ? "Pause" : "Play"}
+        title={playing ? "Pause (Space)" : "Play (Space)"}
       >
         {playing ? <PauseIcon /> : <PlayIcon />}
       </button>
