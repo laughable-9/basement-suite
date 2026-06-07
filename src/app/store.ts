@@ -1,5 +1,8 @@
 import { create } from "zustand";
 import type { Catalog, CatalogEntry, CategoryId } from "../lib/catalog/types";
+import { setOverlay } from "../lib/fsx/modOverlay";
+import { clearAllSheets } from "../lib/sheets/store";
+import { clearThumbScenes } from "../features/home/renderThumb";
 
 export interface Paths {
   gfxRoot: string;
@@ -99,20 +102,58 @@ interface AppState {
   /** Global animation playback speed multiplier (player + hover thumbnails) */
   playbackSpeed: number;
   setPlaybackSpeed: (speed: number) => void;
+
+  /**
+   * The mod whose files the resolver overlays into previews and where
+   * Save-to-mod writes. v1 keeps a single active mod at a time.
+   * Persisted to localStorage[bs:activeMod]; null until the first save.
+   */
+  activeMod: string | null;
+  setActiveMod: (name: string | null) => void;
 }
 
 let nextToastId = 1;
 
 const SPEED_KEY = "bs:playbackSpeed";
+const ACTIVE_MOD_KEY = "bs:activeMod";
+const LEGACY_MOD_KEY = "bs:lastModName";
 
 function initialSpeed(): number {
   const stored = Number(localStorage.getItem(SPEED_KEY));
   return Number.isFinite(stored) && stored >= 0.1 && stored <= 2 ? stored : 0.5;
 }
 
+function initialActiveMod(): string | null {
+  return (
+    localStorage.getItem(ACTIVE_MOD_KEY) ??
+    localStorage.getItem(LEGACY_MOD_KEY)
+  );
+}
+
+/** Reflect (paths, activeMod) into the file-resolver's overlay config. */
+function applyOverlay(
+  paths: Paths | null,
+  activeMod: string | null,
+): void {
+  if (paths && activeMod) {
+    setOverlay({
+      gfxRoot: paths.gfxRoot,
+      modsPath: paths.modsPath,
+      activeMod,
+    });
+  } else {
+    setOverlay(null);
+  }
+  clearAllSheets();
+  clearThumbScenes();
+}
+
 export const useAppStore = create<AppState>((set) => ({
   paths: null,
-  setPaths: (paths) => set({ paths }),
+  setPaths: (paths) => {
+    applyOverlay(paths, useAppStore.getState().activeMod);
+    set({ paths });
+  },
   catalog: null,
   setCatalog: (catalog) => set({ catalog }),
 
@@ -165,6 +206,15 @@ export const useAppStore = create<AppState>((set) => ({
   setPlaybackSpeed: (speed) => {
     localStorage.setItem(SPEED_KEY, String(speed));
     set({ playbackSpeed: speed });
+  },
+
+  activeMod: initialActiveMod(),
+  setActiveMod: (name) => {
+    if (name) localStorage.setItem(ACTIVE_MOD_KEY, name);
+    else localStorage.removeItem(ACTIVE_MOD_KEY);
+    localStorage.removeItem(LEGACY_MOD_KEY);
+    applyOverlay(useAppStore.getState().paths, name);
+    set({ activeMod: name });
   },
 }));
 
