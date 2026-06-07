@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseAnm2 } from "../../lib/anm2/parse";
+import {
+  frameBounds,
+  unionBounds,
+  type Bounds,
+} from "../../lib/anm2/bounds";
 import { normalizeTime } from "../../lib/anm2/timeline";
 import type { Anm2, Anm2Animation } from "../../lib/anm2/types";
 import { readText } from "../../lib/fsx/fs";
@@ -61,6 +66,9 @@ async function load(
 }
 
 const ZOOMS = [1, 2, 3, 4, 6, 8, 12, 16];
+/** Breathing room around the sprite in fit mode (px per side) */
+const FIT_PAD = 56;
+const FIT_MAX = 24;
 
 export function Player({
   path,
@@ -91,7 +99,7 @@ export function Player({
   const [error, setError] = useState<string | null>(null);
   const [animName, setAnimName] = useState("");
   const [playing, setPlaying] = useState(true);
-  const [zoom, setZoom] = useState(4);
+  const [zoom, setZoom] = useState<number | "fit">("fit");
   const [onion, setOnion] = useState(false);
   const [tick, setTick] = useState(0); // continuous playhead, in ticks
   // Bumped when the editor mutates a sheet, to repaint while paused.
@@ -177,6 +185,22 @@ export function Player({
 
   const playbackSpeed = useAppStore((s) => s.playbackSpeed);
 
+  // Whole-timeline bounding box (sampled) so fit zoom and centering are
+  // stable across playback instead of jittering frame to frame.
+  const bounds: Bounds | null = useMemo(() => {
+    if (!anim) return null;
+    let b: Bounds | null = null;
+    const n = Math.max(1, anim.frameNum);
+    const stride = Math.max(1, Math.ceil(n / 48));
+    for (let t = 0; t < n; t += stride) {
+      b = unionBounds(b, frameBounds(anim, t));
+      if (headAnim && headAnim.frameNum > 0) {
+        b = unionBounds(b, frameBounds(headAnim, t % headAnim.frameNum));
+      }
+    }
+    return b;
+  }, [anim, headAnim]);
+
   // Playback clock: advance the playhead by elapsed wall time × fps × speed.
   // Paused while the owning tab is hidden (stays mounted for state).
   useEffect(() => {
@@ -214,10 +238,31 @@ export function Player({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, stage.w, stage.h);
     ctx.imageSmoothingEnabled = false;
-    // Entity origin at stage center, slightly below middle (Isaac sprites
-    // hang mostly above their root point).
-    ctx.translate(stage.w / 2, stage.h * 0.62);
-    ctx.scale(zoom, zoom);
+    // Center the sprite's bounding box in the stage. Fit mode picks the
+    // largest integer zoom that leaves FIT_PAD breathing room (fractional
+    // only when the art is bigger than the stage, e.g. cutscenes).
+    let z: number;
+    let cx = 0;
+    let cy = 0;
+    if (bounds) {
+      const bw = Math.max(1, bounds.maxX - bounds.minX);
+      const bh = Math.max(1, bounds.maxY - bounds.minY);
+      if (zoom === "fit") {
+        const raw = Math.min(
+          (stage.w - FIT_PAD * 2) / bw,
+          (stage.h - FIT_PAD * 2) / bh,
+        );
+        z = raw >= 1 ? Math.min(FIT_MAX, Math.floor(raw)) : Math.max(0.1, raw);
+      } else {
+        z = zoom;
+      }
+      cx = (bounds.minX + bounds.maxX) / 2;
+      cy = (bounds.minY + bounds.maxY) / 2;
+    } else {
+      z = zoom === "fit" ? 4 : zoom;
+    }
+    ctx.translate(stage.w / 2 - cx * z, stage.h / 2 - cy * z);
+    ctx.scale(z, z);
     if (anim && anim.frameNum > 0) {
       if (onion && anim.frameNum > 1) {
         // Ghost the neighboring whole frames at low opacity.
@@ -253,7 +298,7 @@ export function Player({
         renderFrame(ctx, costume.anm2, cHead, at(cHead), costume.sheets);
       }
     }
-  }, [loaded, anim, headAnim, tick, zoom, sheetRev, onion, stage]);
+  }, [loaded, anim, headAnim, tick, zoom, sheetRev, onion, stage, bounds]);
 
   const selectAnim = useCallback((name: string) => {
     setAnimName(name);
@@ -358,11 +403,16 @@ export function Player({
           <select
             className="transport-select"
             title="Preview zoom"
-            value={zoom}
-            onChange={(e) => setZoom(Number(e.target.value))}
+            value={zoom === "fit" ? "fit" : String(zoom)}
+            onChange={(e) =>
+              setZoom(
+                e.target.value === "fit" ? "fit" : Number(e.target.value),
+              )
+            }
           >
+            <option value="fit">Fit</option>
             {ZOOMS.map((z) => (
-              <option key={z} value={z}>
+              <option key={z} value={String(z)}>
                 {z}×
               </option>
             ))}

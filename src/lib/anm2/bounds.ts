@@ -24,6 +24,20 @@ export interface Bounds {
   maxY: number;
 }
 
+export function unionBounds(
+  a: Bounds | null,
+  b: Bounds | null,
+): Bounds | null {
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    minX: Math.min(a.minX, b.minX),
+    minY: Math.min(a.minY, b.minY),
+    maxX: Math.max(a.maxX, b.maxX),
+    maxY: Math.max(a.maxY, b.maxY),
+  };
+}
+
 export function frameBounds(anim: Anm2Animation, t: number): Bounds | null {
   const root = sampleTransformTrack(anim.rootFrames, t) ?? IDENTITY;
   if (!root.visible) return null;

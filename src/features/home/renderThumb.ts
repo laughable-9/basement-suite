@@ -4,7 +4,7 @@
 // Magdalene. Hover playback reuses the same scene.
 
 import type { WorkTab } from "../../app/store";
-import { frameBounds } from "../../lib/anm2/bounds";
+import { frameBounds, unionBounds } from "../../lib/anm2/bounds";
 import { headAnimFor } from "../../lib/anm2/compose";
 import { parseAnm2 } from "../../lib/anm2/parse";
 import type { Anm2, Anm2Animation } from "../../lib/anm2/types";
@@ -107,20 +107,6 @@ export function thumbScene(tab: WorkTab): Promise<ThumbScene | null> {
   return p;
 }
 
-function union(
-  a: ReturnType<typeof frameBounds>,
-  b: ReturnType<typeof frameBounds>,
-) {
-  if (!a) return b;
-  if (!b) return a;
-  return {
-    minX: Math.min(a.minX, b.minX),
-    minY: Math.min(a.minY, b.minY),
-    maxX: Math.max(a.maxX, b.maxX),
-    maxY: Math.max(a.maxY, b.maxY),
-  };
-}
-
 /**
  * Draw the scene at tick t, auto-fit and centered. The camera is locked to
  * `fitTick` (default frame 0) so hover playback doesn't jitter.
@@ -137,9 +123,9 @@ export function drawThumb(
   ctx.clearRect(0, 0, w, h);
   ctx.imageSmoothingEnabled = false;
 
-  const bounds = union(
+  const bounds = unionBounds(
     frameBounds(scene.anim, fitTick),
-    scene.headAnim && frameBounds(scene.headAnim, 0),
+    scene.headAnim ? frameBounds(scene.headAnim, 0) : null,
   );
   if (!bounds) return;
   const bw = Math.max(1, bounds.maxX - bounds.minX);
