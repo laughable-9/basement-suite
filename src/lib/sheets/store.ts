@@ -4,6 +4,7 @@
 
 import { readFile } from "@tauri-apps/plugin-fs";
 import type { Anm2 } from "../anm2/types";
+import { overlayPath } from "../fsx/modOverlay";
 import { dirname, resolveRelative } from "../fsx/resolve";
 
 /** Spritesheet pixel sources by spritesheet id; null = file missing. */
@@ -53,6 +54,19 @@ export function peekSheetDoc(path: string): SheetDoc | undefined {
   return docs.get(path);
 }
 
+/**
+ * Drop every cached SheetDoc — used when the active mod changes, because
+ * file resolution moves to a different absolute path and previously-cached
+ * vanilla docs would otherwise mask the modded ones. Any in-memory edits
+ * on dropped docs are lost: callers must check dirty state first.
+ */
+export function clearAllSheets(): void {
+  docs.clear();
+  for (const set of listeners.values()) {
+    for (const cb of set) cb();
+  }
+}
+
 export function bumpSheet(doc: SheetDoc): void {
   doc.version++;
   doc.dirty = true;
@@ -94,8 +108,11 @@ export async function loadAnm2Sheets(
   };
   await Promise.all(
     anm2.content.spritesheets.map(async (s) => {
-      const resolved =
+      const candidate =
         skinPath && s.id === 0 ? skinPath : resolveRelative(dir, s.rawPath);
+      // Active-mod overlay: if the user's mod overrides this file, swap to
+      // the modded path so the preview reflects their edits.
+      const resolved = await overlayPath(candidate);
       result.byId.set(s.id, resolved);
       try {
         result.sheets.set(s.id, (await getSheetDoc(resolved)).canvas);

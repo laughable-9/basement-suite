@@ -41,6 +41,12 @@ export interface ThumbScene {
 const MAX_THUMB_ZOOM = 3;
 const scenes = new Map<string, Promise<ThumbScene | null>>();
 
+/** Drop every cached scene — used when the active mod changes (different
+ *  files = different render). Components rebuild on next request. */
+export function clearThumbScenes(): void {
+  scenes.clear();
+}
+
 async function load(tab: WorkTab): Promise<ThumbScene | null> {
   if (!tab.anm2Path) return null;
   try {
