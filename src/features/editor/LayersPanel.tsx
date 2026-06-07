@@ -28,20 +28,41 @@ import {
   recordLayerProp,
   recordMoveLayer,
   recordRemoveLayer,
+  recordReorderLayer,
 } from "./history";
 
 interface Props {
   doc: SheetDoc;
+  /** Host-supplied Merge Down (Ctrl+E) action — needs to coordinate with
+   *  history.ts, so the Editor owns it. */
+  onMergeDown: () => void;
 }
 
-export function LayersPanel({ doc }: Props) {
+export function LayersPanel({ doc, onMergeDown }: Props) {
   const [, setRev] = useState(0);
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [dropAt, setDropAt] = useState<number | null>(null);
 
   useEffect(() => {
     return subscribeSheet(doc.path, () => setRev((r) => r + 1));
   }, [doc.path]);
 
+  // Reversed = top of the visual stack first.
   const layers = [...doc.layers].reverse();
+
+  /** Translate a drop position in the REVERSED visual list to the index
+   *  in doc.layers (which is bottom-up). */
+  function applyDrop(targetVisual: number) {
+    if (dragId === null) return;
+    const docTarget = doc.layers.length - 1 - targetVisual;
+    recordReorderLayer(doc, dragId, docTarget);
+    setDragId(null);
+    setDropAt(null);
+  }
+
+  const activeIdx = doc.layers.findIndex((l) => l.id === doc.activeLayerId);
+  const canMergeDown =
+    activeIdx > 0 && !doc.layers[activeIdx - 1].locked;
 
   return (
     <aside className="layers-panel">
@@ -56,13 +77,39 @@ export function LayersPanel({ doc }: Props) {
         </button>
       </header>
       <div className="panel-body">
-        {layers.map((layer) => (
-          <LayerRow
+        {layers.map((layer, visualIdx) => (
+          <div
             key={layer.id}
-            doc={doc}
-            layer={layer}
-            active={layer.id === doc.activeLayerId}
-          />
+            draggable
+            onDragStart={(e) => {
+              setDragId(layer.id);
+              e.dataTransfer.effectAllowed = "move";
+            }}
+            onDragOver={(e) => {
+              if (dragId === null || dragId === layer.id) return;
+              e.preventDefault();
+              const r = e.currentTarget.getBoundingClientRect();
+              const above = e.clientY < r.top + r.height / 2;
+              setDropAt(above ? visualIdx : visualIdx + 1);
+            }}
+            onDragEnd={() => {
+              setDragId(null);
+              setDropAt(null);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dropAt !== null) applyDrop(dropAt);
+            }}
+            className={`layer-row-wrap${
+              dropAt === visualIdx ? " drop-above" : ""
+            }${dropAt === visualIdx + 1 ? " drop-below" : ""}`}
+          >
+            <LayerRow
+              doc={doc}
+              layer={layer}
+              active={layer.id === doc.activeLayerId}
+            />
+          </div>
         ))}
       </div>
       <footer className="layers-footer">
@@ -82,6 +129,18 @@ export function LayersPanel({ doc }: Props) {
         >
           <ChevronDownIcon />
         </button>
+        <button
+          className="rail-btn"
+          disabled={!canMergeDown}
+          onClick={onMergeDown}
+          title={
+            !canMergeDown
+              ? "Need a non-locked layer below to merge into"
+              : "Merge down (Ctrl+E)"
+          }
+        >
+          <MergeDownIcon />
+        </button>
         <span className="toolbar-spacer" />
         <button
           className="rail-btn layers-delete-btn"
@@ -99,6 +158,17 @@ export function LayersPanel({ doc }: Props) {
         </button>
       </footer>
     </aside>
+  );
+}
+
+/** Tiny inline glyph: stacked-square + down arrow, no need to add to icons.tsx. */
+function MergeDownIcon() {
+  return (
+    <svg width={19} height={19} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2.5" y="2.5" width="6" height="5" />
+      <rect x="6.5" y="6.5" width="7" height="6" />
+      <path d="M8 9.5 V13 M6 11 L8 13 L10 11" />
+    </svg>
   );
 }
 

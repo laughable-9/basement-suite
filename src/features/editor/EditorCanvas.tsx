@@ -8,11 +8,16 @@ import { beginStroke, type StrokeRecorder } from "./history";
 import type { CropRect } from "./cropGrid";
 import type { Floating } from "./floating";
 import {
+  buildSelectionCache,
+  fillFlood,
   inSelection,
+  inSelectionCache,
+  lassoSelection,
   magicWand,
   rectSelection,
   translateSelection,
   type Selection,
+  type SelectionCache,
 } from "./selection";
 import type { Rgba } from "../../lib/anm2/types";
 
@@ -21,7 +26,9 @@ export type Tool =
   | "brush"
   | "eraser"
   | "eyedropper"
+  | "fill"
   | "marquee"
+  | "lasso"
   | "wand"
   | "pan";
 
@@ -55,6 +62,11 @@ export interface EditorCanvasProps {
   onSelectionCommit: (sel: Selection | null, label: string) => void;
   /** Magic-wand tolerance, 0–255. */
   wandTolerance: number;
+  /** Paint-bucket tolerance, 0–255. */
+  fillTolerance: number;
+  /** Mirror brush — symmetric paint along the doc's horizontal/vertical axes. */
+  mirrorX: boolean;
+  mirrorY: boolean;
   /** Alt+drag on the canvas with a selection → duplicate via Floating. */
   onAltDragSelection: () => void;
   /** Move tool gesture — host turns the active layer / selection into a
@@ -94,7 +106,13 @@ interface Pointer {
     startSel: Selection;
     startX: number;
     startY: number;
+    /** Reusable mask canvas — allocated once per inside-drag. */
+    scratch: HTMLCanvasElement | null;
   } | null;
+  /** Lasso path being drawn (doc-space points). */
+  lasso: { x: number; y: number }[] | null;
+  /** Pre-read selection alpha for fast per-paint checks during the stroke. */
+  strokeMask: SelectionCache | null;
 }
 
 export function EditorCanvas(props: EditorCanvasProps) {
@@ -116,12 +134,14 @@ export function EditorCanvas(props: EditorCanvasProps) {
     floatEdge: null,
     marqueeAnchor: null,
     marqueeMove: null,
+    lasso: null,
+    strokeMask: null,
   });
   const spaceRef = useRef(false);
   // Preview buffer for the floating image, downsampled to its doc rect so the
   // user sees the final pixelization while positioning.
   const previewRef = useRef<HTMLCanvasElement | null>(null);
-  const prevSourceRef = useRef<ImageBitmap | null>(null);
+  const prevSourceRef = useRef<ImageBitmap | HTMLCanvasElement | null>(null);
 
   // Center the sheet on first mount.
   useEffect(() => {
@@ -263,6 +283,22 @@ export function EditorCanvas(props: EditorCanvasProps) {
           ctx.drawImage(selection.mask, 0, 0);
           ctx.restore();
         }
+      }
+
+      // Lasso path preview while drawing.
+      const lasso = pointerRef.current.lasso;
+      if (lasso && lasso.length > 1) {
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.lineDashOffset = -(performance.now() / 80) % 8;
+        ctx.beginPath();
+        ctx.moveTo(pan.x + lasso[0].x * zoom + 0.5, pan.y + lasso[0].y * zoom + 0.5);
+        for (let i = 1; i < lasso.length; i++) {
+          ctx.lineTo(pan.x + lasso[i].x * zoom + 0.5, pan.y + lasso[i].y * zoom + 0.5);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
 
       // Brush footprint preview
@@ -408,26 +444,36 @@ export function EditorCanvas(props: EditorCanvasProps) {
     );
   }
 
-  function paint(p: { x: number; y: number }): void {
-    const { doc, tool, brushSize, color, selection } = propsRef.current;
+  function paintDot(p: { x: number; y: number }): void {
+    const { doc, tool, brushSize, color } = propsRef.current;
     const layer = activeLayer(doc);
-    if (layer.locked) return; // locked layers reject paint
-    // Center-point selection check: cheap and good enough for 1–3px brushes.
-    // For bigger brushes user can use full-sheet ops.
-    if (!inSelection(selection, p.x, p.y)) return;
+    // Pre-built mask cache from stroke begin — no per-paint getImageData.
+    if (!inSelectionCache(pointerRef.current.strokeMask, p.x, p.y)) return;
     const o = Math.floor((brushSize - 1) / 2);
     const x = p.x - o;
     const y = p.y - o;
     const ctx = layer.ctx;
-    // Replace semantics (no blending): clear then fill — predictable pixels.
     ctx.clearRect(x, y, brushSize, brushSize);
     if (tool === "brush" && color.a > 0) {
       ctx.fillStyle = `rgba(${color.r},${color.g},${color.b},${color.a / 255})`;
       ctx.fillRect(x, y, brushSize, brushSize);
     }
     pointerRef.current.stroke?.touch(x, y, brushSize, brushSize);
-    // Mid-stroke composite so the user sees pixels appear while painting.
-    // Cheap on the typical 512×512 sheet; stroke commit composites once more.
+  }
+
+  function paint(p: { x: number; y: number }): void {
+    const { doc, mirrorX, mirrorY } = propsRef.current;
+    if (activeLayer(doc).locked) return;
+    paintDot(p);
+    // Mirror across the doc center axes — symmetric sprite painting.
+    if (mirrorX || mirrorY) {
+      const w = doc.canvas.width;
+      const h = doc.canvas.height;
+      if (mirrorX) paintDot({ x: w - 1 - p.x, y: p.y });
+      if (mirrorY) paintDot({ x: p.x, y: h - 1 - p.y });
+      if (mirrorX && mirrorY)
+        paintDot({ x: w - 1 - p.x, y: h - 1 - p.y });
+    }
     composite(doc);
   }
 
@@ -600,12 +646,27 @@ export function EditorCanvas(props: EditorCanvasProps) {
         onSelectionCommit(null, "Deselect");
         return;
       }
-      if (selection && inSelection(selection, p.x, p.y)) {
-        ptr.marqueeMove = { startSel: selection, startX: p.x, startY: p.y };
+      if (selection && inSelectionCache(buildSelectionCache(selection), p.x, p.y)) {
+        ptr.marqueeMove = {
+          startSel: selection,
+          startX: p.x,
+          startY: p.y,
+          scratch: null,
+        };
       } else {
         ptr.marqueeAnchor = p;
         onSelectionPreview(rectSelection({ x: p.x, y: p.y, w: 1, h: 1 }));
       }
+      return;
+    }
+
+    // Lasso: collect points; close + rasterize on pointerup.
+    if (tool === "lasso") {
+      if (!inBounds(p)) {
+        onSelectionCommit(null, "Deselect");
+        return;
+      }
+      ptr.lasso = [{ x: p.x, y: p.y }];
       return;
     }
 
@@ -620,11 +681,31 @@ export function EditorCanvas(props: EditorCanvasProps) {
       return;
     }
 
-    if (activeLayer(doc).locked) return; // locked layers reject paint
+    // Fill bucket: flood-fill recolor on the active layer.
+    if (tool === "fill") {
+      if (!inBounds(p) || activeLayer(doc).locked) return;
+      const rec = beginStroke(doc, "Fill");
+      const { color, fillTolerance } = propsRef.current;
+      const bbox = fillFlood(
+        activeLayer(doc),
+        p.x,
+        p.y,
+        color,
+        fillTolerance,
+        selection,
+      );
+      if (bbox) rec.touch(bbox.x, bbox.y, bbox.w, bbox.h);
+      rec.commit();
+      composite(doc);
+      return;
+    }
+
+    if (activeLayer(doc).locked) return;
     ptr.stroke = beginStroke(
       doc,
       tool === "eraser" ? "Eraser" : "Brush",
     );
+    ptr.strokeMask = buildSelectionCache(selection);
     ptr.lastDoc = p;
     if (inBounds(p)) paint(p);
   }
@@ -694,10 +775,26 @@ export function EditorCanvas(props: EditorCanvasProps) {
       return;
     }
     if (ptr.marqueeMove) {
-      const { startSel, startX, startY } = ptr.marqueeMove;
+      const move = ptr.marqueeMove;
+      // Reuse one canvas across the whole drag so we don't allocate
+      // a new doc-sized mask per pointermove.
+      if (!move.scratch && move.startSel.mask) {
+        move.scratch = document.createElement("canvas");
+      }
       propsRef.current.onSelectionPreview(
-        translateSelection(startSel, p.x - startX, p.y - startY),
+        translateSelection(
+          move.startSel,
+          p.x - move.startX,
+          p.y - move.startY,
+          move.scratch ?? undefined,
+        ),
       );
+      return;
+    }
+    if (ptr.lasso) {
+      // Sample sparingly — pointermove fires per-pixel at high zoom.
+      const last = ptr.lasso[ptr.lasso.length - 1];
+      if (last.x !== p.x || last.y !== p.y) ptr.lasso.push({ x: p.x, y: p.y });
       return;
     }
     if (ptr.stroke && ptr.lastDoc) {
@@ -731,15 +828,25 @@ export function EditorCanvas(props: EditorCanvasProps) {
       ptr.marqueeAnchor = null;
     }
     if (ptr.marqueeMove) {
+      // Commit through onSelectionCommit; the recordSelection helper clones
+      // the mask, so leaking the scratch ref to history can't happen.
       propsRef.current.onSelectionCommit(
         propsRef.current.selection,
         "Move marquee",
       );
       ptr.marqueeMove = null;
     }
+    if (ptr.lasso) {
+      const pts = ptr.lasso;
+      ptr.lasso = null;
+      const { doc } = propsRef.current;
+      const sel = lassoSelection(doc.canvas.width, doc.canvas.height, pts);
+      propsRef.current.onSelectionCommit(sel, sel ? "Lasso" : "Deselect");
+    }
     if (ptr.stroke) {
       ptr.stroke.commit();
       ptr.stroke = null;
+      ptr.strokeMask = null;
       ptr.lastDoc = null;
       propsRef.current.onStrokeEnd();
     }
@@ -770,7 +877,7 @@ export function EditorCanvas(props: EditorCanvasProps) {
         ? "move"
         : props.tool === "move"
           ? "move"
-          : props.tool === "wand"
+          : props.tool === "wand" || props.tool === "fill"
             ? "default"
             : "crosshair";
 

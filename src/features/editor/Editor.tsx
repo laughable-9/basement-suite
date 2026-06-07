@@ -24,24 +24,30 @@ import {
   CloseIcon,
   DropperIcon,
   EraserIcon,
+  FillIcon,
   GridIcon,
+  LassoIcon,
   MarqueeIcon,
+  MirrorIcon,
   MoveIcon,
   MoveToolIcon,
   PaletteIcon,
   RedoIcon,
+  SwapArrowsIcon,
   TransformIcon,
   UndoIcon,
   WandIcon,
 } from "../../app/icons";
+import { ColorPicker } from "./ColorPicker";
 import {
   clearSelection,
   extractSelection,
   layerContentBounds,
   type Selection,
 } from "./selection";
+import { composite, bumpSheet } from "../../lib/sheets/store";
 import { activeLayer, previewSelection } from "../../lib/sheets/store";
-import { recordSelection } from "./history";
+import { recordRemoveLayer, recordSelection } from "./history";
 
 const BRUSH_MIN = 1;
 const BRUSH_MAX = 64;
@@ -57,15 +63,6 @@ function toHex(c: Rgba): string {
   return `#${h(c.r)}${h(c.g)}${h(c.b)}`;
 }
 
-function fromHex(hex: string, a: number): Rgba {
-  return {
-    r: parseInt(hex.slice(1, 3), 16),
-    g: parseInt(hex.slice(3, 5), 16),
-    b: parseInt(hex.slice(5, 7), 16),
-    a,
-  };
-}
-
 const TOOLS: {
   id: Tool;
   icon: () => React.ReactNode;
@@ -76,7 +73,9 @@ const TOOLS: {
   { id: "brush",      icon: BrushIcon,    tip: "Brush (B)",      label: "Brush" },
   { id: "eraser",     icon: EraserIcon,   tip: "Eraser (E)",     label: "Eraser" },
   { id: "eyedropper", icon: DropperIcon,  tip: "Eyedropper (I)", label: "Eyedropper" },
+  { id: "fill",       icon: FillIcon,     tip: "Fill bucket (G) — flood-fill connected pixels with the current color", label: "Fill bucket" },
   { id: "marquee",    icon: MarqueeIcon,  tip: "Rectangle marquee (M) — drag to select, inside-drag moves the outline, Ctrl+T transform, Alt+drag duplicate, Ctrl+X clear, Ctrl+D deselect", label: "Marquee" },
+  { id: "lasso",      icon: LassoIcon,    tip: "Lasso (L) — drag a freeform shape; release to close", label: "Lasso" },
   { id: "wand",       icon: WandIcon,     tip: "Magic wand (W) — tolerance in the options strip", label: "Magic wand" },
   { id: "pan",        icon: MoveIcon,     tip: "Pan view (H, or hold Space / middle-drag)", label: "Pan" },
 ];
@@ -129,7 +128,11 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   const [highlightRect, setHighlightRect] = useState<CropRect | null>(null);
   const [tool, setTool] = useState<Tool>("move");
   const [brushSize, setBrushSize] = useState(1);
-  const [color, setColor] = useState<Rgba>({ r: 255, g: 255, b: 255, a: 255 });
+  // Photoshop foreground/background. `color` is the brush/fill color. `bgColor`
+  // is the secondary swatch — X swaps them, D resets to defaults.
+  const [color, setColor] = useState<Rgba>({ r: 0, g: 0, b: 0, a: 255 });
+  const [bgColor, setBgColor] = useState<Rgba>({ r: 255, g: 255, b: 255, a: 255 });
+  const [picker, setPicker] = useState<"fg" | "bg" | null>(null);
   const [recent, setRecent] = useState<Rgba[]>([]);
   const [palette, setPalette] = useState<Rgba[] | null>(null);
   const [showGrid, setShowGrid] = useState(true);
@@ -142,6 +145,9 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   }, [doc]);
   const selection: Selection | null = doc?.selection ?? null;
   const [wandTolerance, setWandTolerance] = useState(32);
+  const [fillTolerance, setFillTolerance] = useState(0);
+  const [mirrorX, setMirrorX] = useState(false);
+  const [mirrorY, setMirrorY] = useState(false);
   // Initial zoom seeded from the last value the user set, so reopening the
   // editor (or switching to the Mods diff viewer) keeps the same scale.
   const initialZoom = useAppStore.getState().lastEditorZoom;
@@ -159,7 +165,6 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   const [savedPath, setSavedPath] = useState<string | null>(null);
   // Bumped on sheet mutations so undo/redo button state stays fresh.
   const [, setRev] = useState(0);
-  const colorInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -256,7 +261,13 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   }, [doc, floating]);
 
   const cancelFloating = useCallback(() => {
-    floating?.source.close();
+    if (!floating) return;
+    // Floating with a carry-along recorder (Move / Transform) → abort
+    // restores the layer to its pre-cut pixels and pushes nothing.
+    if (floating.recorder) floating.recorder.abort();
+    if ("close" in floating.source && typeof floating.source.close === "function") {
+      floating.source.close();
+    }
     setFloating(null);
   }, [floating]);
 
@@ -275,7 +286,10 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
         canvas = extractSelection(doc, sel, false);
       }
       const bitmap = await createImageBitmap(canvas);
-      floating?.source.close();
+      const prev = floating?.source;
+      if (prev && "close" in prev && typeof prev.close === "function") {
+        prev.close();
+      }
       setFloating({
         source: bitmap,
         x: sel.bounds.x,
@@ -333,23 +347,69 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
     void beginTransform(selection, false, "Duplicate");
   }, [doc, selection, beginTransform]);
 
-  /** Move tool click — pick up the selection or the layer's content and
-   *  attach it to the floating system so the user can drag it. */
+  /**
+   * Move tool click — lifts pixels off the active layer and floats them
+   * synchronously. Holds an open stroke recorder through the drag so cut
+   * and stamp collapse to one "Move" entry in history. Esc aborts and
+   * restores the original pixels through recorder.abort().
+   */
   const onMoveStart = useCallback(() => {
     if (!doc) return;
     if (activeLayer(doc).locked) return;
-    const sel: Selection = selection ?? {
-      bounds: layerContentBounds(activeLayer(doc)) ?? {
-        x: 0,
-        y: 0,
-        w: 0,
-        h: 0,
-      },
-      mask: null,
-    };
-    if (sel.bounds.w <= 0 || sel.bounds.h <= 0) return;
-    void beginTransform(sel, true, "Move");
-  }, [doc, selection, beginTransform]);
+    const bounds = selection?.bounds ?? layerContentBounds(activeLayer(doc));
+    if (!bounds || bounds.w <= 0 || bounds.h <= 0) return;
+    const sel: Selection = selection ?? { bounds, mask: null };
+    const rec = beginStroke(doc, "Move");
+    rec.touch(bounds.x, bounds.y, bounds.w, bounds.h);
+    const canvas = extractSelection(doc, sel, true);
+    floating?.recorder?.abort();
+    if (
+      floating?.source &&
+      "close" in floating.source &&
+      typeof floating.source.close === "function"
+    ) {
+      floating.source.close();
+    }
+    setFloating({
+      source: canvas,
+      x: bounds.x,
+      y: bounds.y,
+      w: bounds.w,
+      h: bounds.h,
+      recorder: rec,
+      commitLabel: "Move",
+    });
+    recordSelection(doc, "Deselect", null);
+  }, [doc, selection, floating]);
+
+  /**
+   * Merge the active layer down onto the layer immediately beneath it,
+   * then remove the active one. Photoshop's Ctrl+E. Two history entries
+   * land: the pixel diff on the underlying layer, then the layer removal.
+   */
+  const triggerMergeDown = useCallback(() => {
+    if (!doc) return;
+    const idx = doc.layers.findIndex((l) => l.id === doc.activeLayerId);
+    if (idx <= 0) return; // bottom layer or invalid
+    const active = doc.layers[idx];
+    const below = doc.layers[idx - 1];
+    if (below.locked) return;
+    // Step 1: composite active onto below as one pixel patch.
+    const prevActive = doc.activeLayerId;
+    doc.activeLayerId = below.id;
+    const rec = beginStroke(doc, `Merge "${active.name}" down`);
+    rec.touch(0, 0, below.canvas.width, below.canvas.height);
+    below.ctx.save();
+    below.ctx.globalAlpha = active.opacity;
+    below.ctx.drawImage(active.canvas, 0, 0);
+    below.ctx.restore();
+    rec.commit();
+    doc.activeLayerId = prevActive;
+    composite(doc);
+    bumpSheet(doc);
+    // Step 2: remove the now-merged active layer through history.
+    recordRemoveLayer(doc, active.id);
+  }, [doc]);
 
   const onSelectionPreview = useCallback(
     (sel: Selection | null) => {
@@ -380,7 +440,10 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
       if (!file) return;
       e.preventDefault();
       const bitmap = await createImageBitmap(file);
-      floating?.source.close(); // replace any previous floating paste
+      const prev = floating?.source;
+      if (prev && "close" in prev && typeof prev.close === "function") {
+        prev.close();
+      }
       setFloating(makeFloating(bitmap, doc));
       setTool("move");
     };
@@ -423,6 +486,9 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
         // Photoshop deselect.
         e.preventDefault();
         if (selection) recordSelection(doc, "Deselect", null);
+      } else if (e.ctrlKey && e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        triggerMergeDown();
       } else if (
         !e.ctrlKey &&
         (e.key === "Delete" || e.key === "Backspace")
@@ -434,13 +500,25 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
         else if (e.key === "b") setTool("brush");
         else if (e.key === "e") setTool("eraser");
         else if (e.key === "i") setTool("eyedropper");
+        else if (e.key === "g") setTool("fill");
         else if (e.key === "m") setTool("marquee");
+        else if (e.key === "l") setTool("lasso");
         else if (e.key === "w") setTool("wand");
         else if (e.key === "h") setTool("pan");
-        else if (e.key === "g") setShowGrid((s) => !s);
-        else if (e.key === "Escape" && selection)
-          recordSelection(doc, "Deselect", null);
-        else if (e.key === "[")
+        else if (e.key === "x") {
+          // Photoshop FG/BG swap.
+          const fg = color;
+          setColor(bgColor);
+          setBgColor(fg);
+        } else if (e.key === "d") {
+          // Photoshop default colors — black FG, white BG.
+          setColor({ r: 0, g: 0, b: 0, a: 255 });
+          setBgColor({ r: 255, g: 255, b: 255, a: 255 });
+        } else if (e.key === "/") setShowGrid((s) => !s);
+        else if (e.key === "Escape") {
+          if (floating) cancelFloating();
+          else if (selection) recordSelection(doc, "Deselect", null);
+        } else if (e.key === "[")
           setBrushSize((s) => Math.max(BRUSH_MIN, s - 1));
         else if (e.key === "]")
           setBrushSize((s) => Math.min(BRUSH_MAX, s + 1));
@@ -457,6 +535,9 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
     selection,
     triggerTransform,
     triggerClear,
+    triggerMergeDown,
+    color,
+    bgColor,
   ]);
 
   const fileName = useMemo(
@@ -537,14 +618,18 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
             {tool === "brush" && (
               <>
                 <span className="opt-sep" />
-                <label className="opt">
-                  <input
-                    ref={colorInputRef}
-                    type="color"
-                    value={toHex(color)}
-                    onChange={(e) => setColor(fromHex(e.target.value, color.a))}
+                <button
+                  className="opt-swatch checkerboard"
+                  title={`Foreground color rgba(${rgbaKey(color)}) — click to open picker`}
+                  onClick={() => setPicker("fg")}
+                >
+                  <span
+                    style={{
+                      background: `rgba(${color.r},${color.g},${color.b},${color.a / 255})`,
+                    }}
                   />
-                </label>
+                </button>
+                <span className="opt-hex">#{toHex(color).slice(1).toUpperCase()}</span>
                 <label className="opt">
                   Opacity
                   <input
@@ -624,6 +709,50 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
             Drag a rectangle to select · Ctrl+T transform · Ctrl+X / Delete
             clear · Alt+drag inside duplicates · Esc deselects
           </span>
+        )}
+        {!floating && tool === "lasso" && (
+          <span className="opt-hint">
+            Drag a freeform shape to select · release to close · Esc deselects
+          </span>
+        )}
+        {!floating && tool === "fill" && (
+          <>
+            <label className="opt">
+              Tolerance
+              <input
+                type="range"
+                min={0}
+                max={120}
+                value={fillTolerance}
+                onChange={(e) => setFillTolerance(Number(e.target.value))}
+              />
+              <span className="opt-num">{fillTolerance}</span>
+            </label>
+            <span className="opt-sep" />
+            <span className="opt-hint">
+              Click to flood-fill matching pixels
+            </span>
+          </>
+        )}
+        {!floating && (tool === "brush" || tool === "eraser") && (
+          <>
+            <span className="opt-sep" />
+            <button
+              className={`rail-btn opt-icon-btn${mirrorX ? " active" : ""}`}
+              title="Mirror horizontally across the doc's vertical center"
+              onClick={() => setMirrorX((m) => !m)}
+            >
+              <MirrorIcon />
+            </button>
+            <button
+              className={`rail-btn opt-icon-btn${mirrorY ? " active" : ""}`}
+              title="Mirror vertically across the doc's horizontal center"
+              onClick={() => setMirrorY((m) => !m)}
+              style={{ transform: "rotate(90deg)" }}
+            >
+              <MirrorIcon />
+            </button>
+          </>
         )}
         {!floating && tool === "wand" && (
           <>
@@ -721,18 +850,56 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
           >
             <GridIcon />
           </button>
-          <span className="toolbar-spacer" />
-          <button
-            className="rail-swatch checkerboard"
-            title={`Current color rgba(${rgbaKey(color)}) — click to change`}
-            onClick={() => colorInputRef.current?.click()}
+          <span className="rail-sep" />
+          <div
+            className="fg-bg-widget"
+            title="Foreground / Background — click to open picker · X to swap · D to reset"
           >
-            <span
-              style={{
-                background: `rgba(${color.r},${color.g},${color.b},${color.a / 255})`,
+            <button
+              className="fg-bg-swatch fg-bg-bg checkerboard"
+              title={`Background color rgba(${rgbaKey(bgColor)}) — click to open picker`}
+              onClick={() => setPicker("bg")}
+            >
+              <span
+                style={{
+                  background: `rgba(${bgColor.r},${bgColor.g},${bgColor.b},${bgColor.a / 255})`,
+                }}
+              />
+            </button>
+            <button
+              className="fg-bg-swatch fg-bg-fg checkerboard"
+              title={`Foreground color rgba(${rgbaKey(color)}) — click to open picker`}
+              onClick={() => setPicker("fg")}
+            >
+              <span
+                style={{
+                  background: `rgba(${color.r},${color.g},${color.b},${color.a / 255})`,
+                }}
+              />
+            </button>
+            <button
+              className="fg-bg-swap"
+              title="Swap foreground and background (X)"
+              onClick={() => {
+                const fg = color;
+                setColor(bgColor);
+                setBgColor(fg);
               }}
-            />
-          </button>
+            >
+              <SwapArrowsIcon size={11} />
+            </button>
+            <button
+              className="fg-bg-reset"
+              title="Reset to default black / white (D)"
+              onClick={() => {
+                setColor({ r: 0, g: 0, b: 0, a: 255 });
+                setBgColor({ r: 255, g: 255, b: 255, a: 255 });
+              }}
+            >
+              <span className="fg-bg-reset-fg" />
+              <span className="fg-bg-reset-bg" />
+            </button>
+          </div>
         </div>
         <div className="editor-main">
           <EditorCanvas
@@ -755,6 +922,9 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
             onSelectionPreview={onSelectionPreview}
             onSelectionCommit={onSelectionCommit}
             wandTolerance={wandTolerance}
+            fillTolerance={fillTolerance}
+            mirrorX={mirrorX}
+            mirrorY={mirrorY}
             onAltDragSelection={onAltDragSelection}
             onMoveStart={onMoveStart}
           />
@@ -764,10 +934,26 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
           </div>
         </div>
         <div className="editor-panels">
-          <LayersPanel doc={doc} />
+          <LayersPanel doc={doc} onMergeDown={triggerMergeDown} />
           <HistoryPanel doc={doc} />
         </div>
       </div>
+      {picker && (
+        <ColorPicker
+          initial={picker === "fg" ? color : bgColor}
+          title={picker === "fg" ? "Foreground Color" : "Background Color"}
+          onCancel={() => setPicker(null)}
+          onCommit={(c) => {
+            if (picker === "fg") {
+              setColor(c);
+              pushRecent(c);
+            } else {
+              setBgColor(c);
+            }
+            setPicker(null);
+          }}
+        />
+      )}
       {saveOpen && (
         <SaveToModDialog
           doc={doc}

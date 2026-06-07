@@ -2,16 +2,32 @@
 // movable and scalable; committing stamps it into the sheet's pixel grid —
 // the downscale to sheet resolution is what pixelizes it.
 
-import { beginStroke } from "./history";
+import {
+  beginStroke,
+  type StrokeRecorder,
+} from "./history";
 import { activeLayer, type SheetDoc } from "../../lib/sheets/store";
 
+/** Source can be either an async-decoded ImageBitmap (Ctrl+V paste) or a
+ *  synchronous canvas (Move tool, transform). drawImage accepts both. */
+export type FloatingSource = ImageBitmap | HTMLCanvasElement;
+
 export interface Floating {
-  source: ImageBitmap;
+  source: FloatingSource;
   /** Doc-space rect (fractional while dragging; rounded at commit) */
   x: number;
   y: number;
   w: number;
   h: number;
+  /** When set, the stroke recorder is committed at stamp time so the cut
+   *  (already applied to the layer) and the paste land as one patch. */
+  recorder?: StrokeRecorder;
+  /** Override the commit's history label. Defaults to "Paste". */
+  commitLabel?: string;
+}
+
+function closeSource(s: FloatingSource): void {
+  if ("close" in s && typeof s.close === "function") s.close();
 }
 
 /** Build a floating object from a pasted image, fit inside the sheet. */
@@ -39,15 +55,15 @@ export function commitFloating(doc: SheetDoc, f: Floating): void {
   const w = Math.max(1, Math.round(f.w));
   const h = Math.max(1, Math.round(f.h));
 
-  const rec = beginStroke(doc, "Paste");
+  // Carry-along recorder: a Move-tool gesture began its stroke at lift time
+  // and held it open through the drag so cut+paste collapse to one patch.
+  const rec = f.recorder ?? beginStroke(doc, f.commitLabel ?? "Paste");
   const ctx = activeLayer(doc).ctx;
-  // High-quality downsample onto the sheet's grid: each target pixel becomes
-  // an area average of the source — this IS the pixelization step.
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(f.source, x, y, w, h);
   ctx.imageSmoothingEnabled = false;
   rec.touch(x, y, w, h);
   rec.commit();
-  f.source.close();
+  closeSource(f.source);
 }

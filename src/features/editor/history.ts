@@ -189,6 +189,9 @@ function pushPatch(doc: SheetDoc, patch: Patch): void {
 export interface StrokeRecorder {
   touch(x: number, y: number, w?: number, h?: number): void;
   commit(): void;
+  /** Cancel the stroke — restore the layer to its pre-stroke pixels and
+   *  push nothing to history. Used by Esc/cancel-floating. */
+  abort(): void;
 }
 
 export function beginStroke(doc: SheetDoc, label: string): StrokeRecorder {
@@ -223,6 +226,12 @@ export function beginStroke(doc: SheetDoc, label: string): StrokeRecorder {
         before: pre.getContext("2d")!.getImageData(x, y, w, h),
         after: layer.ctx.getImageData(x, y, w, h),
       });
+      composite(doc);
+      bumpSheet(doc);
+    },
+    abort() {
+      layer.ctx.clearRect(0, 0, layer.canvas.width, layer.canvas.height);
+      layer.ctx.drawImage(pre, 0, 0);
       composite(doc);
       bumpSheet(doc);
     },
@@ -323,6 +332,29 @@ export function recordMoveLayer(
     label: delta > 0 ? `Move "${layer.name}" up` : `Move "${layer.name}" down`,
     layerId: id,
     from: idx,
+    to,
+  });
+  bumpSheet(doc);
+}
+
+/** Drag-to-reorder: move a layer to an absolute target index. */
+export function recordReorderLayer(
+  doc: SheetDoc,
+  id: number,
+  targetIndex: number,
+): void {
+  const from = doc.layers.findIndex((l) => l.id === id);
+  if (from === -1) return;
+  const to = Math.max(0, Math.min(doc.layers.length - 1, targetIndex));
+  if (from === to) return;
+  const [layer] = doc.layers.splice(from, 1);
+  doc.layers.splice(to, 0, layer);
+  composite(doc);
+  pushPatch(doc, {
+    kind: "layerReorder",
+    label: `Reorder "${layer.name}"`,
+    layerId: id,
+    from,
     to,
   });
   bumpSheet(doc);

@@ -1259,6 +1259,11 @@ body {
   height: 22px;
 }
 
+.opt-icon-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
 .editor-body {
   flex: 1;
   display: flex;
@@ -1364,6 +1369,18 @@ body {
 .layers-delete-btn:hover:not(:disabled) {
   background: rgba(224, 128, 112, 0.18);
   color: #f0a090;
+}
+
+.layer-row-wrap {
+  position: relative;
+}
+
+.layer-row-wrap.drop-above {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.layer-row-wrap.drop-below {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
 }
 
 .layer-row {
@@ -2331,4 +2348,315 @@ body {
   font-variant-numeric: tabular-nums;
   width: 1%;
   white-space: nowrap;
+}
+
+/* ---------------- Color picker modal ---------------- */
+
+.color-picker-modal {
+  width: auto;
+  padding: 14px 16px 14px;
+}
+
+.color-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.color-picker-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.color-picker-body {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.color-picker-sv {
+  position: relative;
+  width: 236px;
+  height: 236px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  cursor: crosshair;
+}
+
+.color-picker-sv canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.color-picker-sv-dot {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid #fff;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+}
+
+.color-picker-hue {
+  position: relative;
+  width: 18px;
+  height: 236px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  cursor: ns-resize;
+}
+
+.color-picker-hue canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.color-picker-hue-mark {
+  position: absolute;
+  left: -3px;
+  right: -3px;
+  height: 4px;
+  background: transparent;
+  border-top: 1px solid #fff;
+  border-bottom: 1px solid #fff;
+  transform: translateY(-50%);
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6) inset;
+}
+
+.color-picker-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 168px;
+}
+
+.color-picker-preview {
+  display: flex;
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.color-picker-preview-new,
+.color-picker-preview-old {
+  flex: 1;
+}
+
+.cp-field {
+  display: grid;
+  grid-template-columns: 14px 1fr 14px;
+  gap: 6px;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.cp-field > span:first-child {
+  text-align: right;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.cp-field .cp-unit {
+  text-align: left;
+  color: var(--text-dim);
+}
+
+.cp-field input {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 12px;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+
+.cp-field input:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.cp-field-hex input {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.cp-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.color-picker-swatches {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3px;
+  margin-top: 10px;
+}
+
+.color-picker-preset {
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.color-picker-preset:hover {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* ---------------- Foreground / Background widget (tool rail) ---------------- */
+
+.fg-bg-widget {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  margin: 6px auto 4px;
+}
+
+.fg-bg-swatch {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  cursor: pointer;
+  overflow: hidden;
+  background: transparent;
+}
+
+.fg-bg-swatch span {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.fg-bg-swatch:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.fg-bg-fg {
+  left: 0;
+  top: 0;
+  z-index: 2;
+}
+
+.fg-bg-bg {
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
+.fg-bg-swap {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  display: grid;
+  place-items: center;
+  z-index: 3;
+}
+
+.fg-bg-swap:hover {
+  color: var(--text);
+}
+
+.fg-bg-reset {
+  position: absolute;
+  left: -2px;
+  bottom: -2px;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  z-index: 3;
+}
+
+.fg-bg-reset-fg,
+.fg-bg-reset-bg {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--border);
+  border-radius: 1px;
+}
+
+.fg-bg-reset-fg {
+  left: 0;
+  top: 0;
+  background: #000;
+  z-index: 2;
+}
+
+.fg-bg-reset-bg {
+  right: 0;
+  bottom: 0;
+  background: #fff;
+  z-index: 1;
+}
+
+.fg-bg-reset:hover .fg-bg-reset-fg,
+.fg-bg-reset:hover .fg-bg-reset-bg {
+  border-color: var(--accent);
+}
+
+/* Inline swatch button used in the brush options strip — same footprint as
+   the rail FG square so the picker entry-points feel consistent. */
+.opt-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  cursor: pointer;
+  overflow: hidden;
+  background: transparent;
+  margin: 0 4px;
+}
+
+.opt-swatch span {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.opt-swatch:hover {
+  border-color: var(--accent);
+}
+
+.opt-hex {
+  font: 11.5px ui-monospace, "Cascadia Code", Consolas, monospace;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin-right: 4px;
 }

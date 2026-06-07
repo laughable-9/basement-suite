@@ -25,12 +25,17 @@ export interface SelectionBounds {
 // has the helpers that build / read / clear it.
 export type Selection = SelectionState;
 
-/** Translate selection (bounds + mask) by (dx, dy). Used by marquee
- *  inside-drag — Photoshop's "move the dashed outline only" gesture. */
+/**
+ * Translate selection (bounds + mask) by (dx, dy). Used by marquee
+ * inside-drag. Optional `into` canvas lets the caller reuse one alloc
+ * across an entire drag instead of producing a fresh doc-sized canvas
+ * per pointermove.
+ */
 export function translateSelection(
   sel: Selection,
   dx: number,
   dy: number,
+  into?: HTMLCanvasElement,
 ): Selection {
   const bounds = {
     x: sel.bounds.x + dx,
@@ -39,11 +44,44 @@ export function translateSelection(
     h: sel.bounds.h,
   };
   if (!sel.mask) return { bounds, mask: null };
-  const newMask = document.createElement("canvas");
-  newMask.width = sel.mask.width;
-  newMask.height = sel.mask.height;
-  newMask.getContext("2d")!.drawImage(sel.mask, dx, dy);
+  const newMask = into ?? document.createElement("canvas");
+  if (newMask.width !== sel.mask.width) newMask.width = sel.mask.width;
+  if (newMask.height !== sel.mask.height) newMask.height = sel.mask.height;
+  const ctx = newMask.getContext("2d")!;
+  ctx.clearRect(0, 0, newMask.width, newMask.height);
+  ctx.drawImage(sel.mask, dx, dy);
   return { bounds, mask: newMask };
+}
+
+/** Pre-read alpha cache for fast `inSelection`-equivalent checks inside a
+ *  brush stroke. Avoids 1×1 getImageData per paint. */
+export interface SelectionCache {
+  bounds: SelectionBounds;
+  /** Full mask ImageData; null = rect-only selection (bounds check suffices). */
+  maskAlpha: Uint8ClampedArray | null;
+  maskW: number;
+}
+
+export function buildSelectionCache(
+  sel: Selection | null,
+): SelectionCache | null {
+  if (!sel) return null;
+  if (!sel.mask) return { bounds: sel.bounds, maskAlpha: null, maskW: 0 };
+  const ctx = sel.mask.getContext("2d", { willReadFrequently: true })!;
+  const data = ctx.getImageData(0, 0, sel.mask.width, sel.mask.height).data;
+  return { bounds: sel.bounds, maskAlpha: data, maskW: sel.mask.width };
+}
+
+export function inSelectionCache(
+  cache: SelectionCache | null,
+  x: number,
+  y: number,
+): boolean {
+  if (!cache) return true;
+  const b = cache.bounds;
+  if (x < b.x || y < b.y || x >= b.x + b.w || y >= b.y + b.h) return false;
+  if (!cache.maskAlpha) return true;
+  return cache.maskAlpha[(y * cache.maskW + x) * 4 + 3] > 0;
 }
 
 /** Clone a selection (used by history snapshots so the mask canvas can't
@@ -209,6 +247,105 @@ export function layerContentBounds(layer: SheetLayer): SelectionBounds | null {
   }
   if (maxX < 0) return null;
   return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+/**
+ * Flood-fill the active layer with `color` starting at (x, y), connected
+ * within `tolerance` (RGBA Euclidean, 0–255 scale). Honors the supplied
+ * selection by skipping unfilled pixels — pure helper, no history.
+ * Returns the dirty bbox or null if no pixels changed.
+ */
+export function fillFlood(
+  layer: SheetLayer,
+  startX: number,
+  startY: number,
+  color: { r: number; g: number; b: number; a: number },
+  tolerance: number,
+  sel: Selection | null,
+): SelectionBounds | null {
+  const w = layer.canvas.width;
+  const h = layer.canvas.height;
+  if (startX < 0 || startY < 0 || startX >= w || startY >= h) return null;
+  if (sel && !inSelection(sel, startX, startY)) return null;
+  const cache = buildSelectionCache(sel);
+  const img = layer.ctx.getImageData(0, 0, w, h);
+  const data = img.data;
+  const s = (startY * w + startX) * 4;
+  const tr = data[s], tg = data[s + 1], tb = data[s + 2], ta = data[s + 3];
+  const tol2 = tolerance * tolerance * 4;
+  const visited = new Uint8Array(w * h);
+  const stack: number[] = [startY * w + startX];
+  let minX = startX, minY = startY, maxX = startX, maxY = startY;
+  let any = false;
+  while (stack.length) {
+    const p = stack.pop()!;
+    if (visited[p]) continue;
+    visited[p] = 1;
+    const i = p * 4;
+    const dr = data[i] - tr;
+    const dg = data[i + 1] - tg;
+    const db = data[i + 2] - tb;
+    const da = data[i + 3] - ta;
+    if (dr * dr + dg * dg + db * db + da * da > tol2) continue;
+    const px = p % w;
+    const py = (p - px) / w;
+    if (!inSelectionCache(cache, px, py)) continue;
+    data[i] = color.r;
+    data[i + 1] = color.g;
+    data[i + 2] = color.b;
+    data[i + 3] = color.a;
+    any = true;
+    if (px < minX) minX = px;
+    if (py < minY) minY = py;
+    if (px > maxX) maxX = px;
+    if (py > maxY) maxY = py;
+    if (px > 0) stack.push(p - 1);
+    if (px < w - 1) stack.push(p + 1);
+    if (py > 0) stack.push(p - w);
+    if (py < h - 1) stack.push(p + w);
+  }
+  if (!any) return null;
+  layer.ctx.putImageData(img, 0, 0);
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+/**
+ * Rasterize a polygon (lasso path) into a doc-sized binary mask + bbox.
+ * `points` are doc-space corners; the path is auto-closed. Returns null
+ * if the polygon collapses to a single pixel or line.
+ */
+export function lassoSelection(
+  docWidth: number,
+  docHeight: number,
+  points: { x: number; y: number }[],
+): Selection | null {
+  if (points.length < 3) return null;
+  let minX = points[0].x, minY = points[0].y;
+  let maxX = minX, maxY = minY;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+  minX = Math.max(0, Math.floor(minX));
+  minY = Math.max(0, Math.floor(minY));
+  maxX = Math.min(docWidth - 1, Math.ceil(maxX));
+  maxY = Math.min(docHeight - 1, Math.ceil(maxY));
+  const w = maxX - minX + 1;
+  const h = maxY - minY + 1;
+  if (w <= 0 || h <= 0) return null;
+  const mask = document.createElement("canvas");
+  mask.width = docWidth;
+  mask.height = docHeight;
+  const ctx = mask.getContext("2d")!;
+  ctx.fillStyle = "#fff";
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.closePath();
+  ctx.fill();
+  return { bounds: { x: minX, y: minY, w, h }, mask };
 }
 
 /** Clear the masked pixels on the active layer (Ctrl+X / Delete). */
