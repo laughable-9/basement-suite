@@ -15,6 +15,7 @@ import { commitFloating, makeFloating, type Floating } from "./floating";
 import { extractPalette } from "./palette";
 import { SaveToModDialog } from "../export/SaveToModDialog";
 import { EditorCanvas, type Tool } from "./EditorCanvas";
+import { findSharedSheetInfo } from "./sharedSheet";
 import {
   CloseIcon,
   CursorIcon,
@@ -80,6 +81,23 @@ interface EditorProps {
 export function Editor({ target, tabId, active, onClose }: EditorProps) {
   const requestPlayerJump = useAppStore((s) => s.requestPlayerJump);
   const addToast = useAppStore((s) => s.addToast);
+  const catalog = useAppStore((s) => s.catalog);
+  const currentTitle = useAppStore(
+    (s) => s.tabs.find((t) => t.id === tabId)?.title,
+  );
+  const sharedInfo = useMemo(
+    () =>
+      findSharedSheetInfo(
+        catalog,
+        currentTitle,
+        target.anm2Path,
+        target.sheetId,
+      ),
+    [catalog, currentTitle, target.anm2Path, target.sheetId],
+  );
+  // Dismissal is per-sheet: closing the warning on Azazel's head sheet won't
+  // suppress it when the user later opens ghost.png.
+  const [dismissedFor, setDismissedFor] = useState<string | null>(null);
 
   const [doc, setDoc] = useState<SheetDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -394,6 +412,28 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
         )}
       </div>
 
+      {sharedInfo && dismissedFor !== target.sheetPath && (
+        <div className="editor-shared-warning" role="alert">
+          <span className="editor-shared-text">
+            <strong>Shared sheet:</strong> edits also affect{" "}
+            {sharedInfo.others.length === 1
+              ? sharedInfo.others[0]
+              : sharedInfo.others.length <= 4
+                ? sharedInfo.others.join(", ")
+                : `${sharedInfo.others.slice(0, 3).join(", ")} +${sharedInfo.others.length - 3} more`}
+            {sharedInfo.reason === "player"
+              ? " — this sheet is pulled in by every character through the shared player anm2."
+              : " — this costume is reused by the characters above."}
+          </span>
+          <button
+            className="editor-shared-close"
+            title="Dismiss for this sheet"
+            onClick={() => setDismissedFor(target.sheetPath)}
+          >
+            <CloseIcon />
+          </button>
+        </div>
+      )}
       <div className="editor-body">
         <div className="tool-rail">
           {TOOLS.map((t) => (

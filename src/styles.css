@@ -685,6 +685,49 @@ body {
   height: 22px;
 }
 
+/* Multi-character warning bar: edits to this sheet affect other characters.
+   Always visible when applicable; users can dismiss per sheet. */
+.editor-shared-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #e8c78a;
+  background: #3a2e1d;
+  border-bottom: 1px solid #6a4f2a;
+  padding: 6px 8px 6px 12px;
+  flex-shrink: 0;
+}
+
+.editor-shared-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-shared-warning strong {
+  color: #f0d8a8;
+  font-weight: 600;
+  margin-right: 4px;
+}
+
+.editor-shared-close {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 3px;
+  background: none;
+  color: #e8c78a;
+  cursor: pointer;
+}
+
+.editor-shared-close:hover {
+  background: rgba(232, 199, 138, 0.15);
+  color: #f0d8a8;
+}
+
 .opt {
   display: flex;
   align-items: center;
