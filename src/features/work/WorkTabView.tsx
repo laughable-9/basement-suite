@@ -28,37 +28,18 @@ export function WorkTabView({ tab, active }: { tab: WorkTab; active: boolean }) 
 }
 
 function TabContent({ tab, active }: { tab: WorkTab; active: boolean }) {
-  const setTabEditing = useAppStore((s) => s.setTabEditing);
-
   if (tab.anm2Path) {
+    // Skin editing lives in the player's Sheets panel (sheet 0 = the skin).
     return (
-      <div className="detail">
-        <h2>{tab.title}</h2>
-        {tab.sheetPath && (
-          <div className="detail-meta">
-            character skin:{" "}
-            <button
-              className="edit-link"
-              onClick={() =>
-                setTabEditing(tab.id, {
-                  sheetPath: tab.sheetPath!,
-                  anm2Path: tab.anm2Path,
-                  sheetId: 0, // skins substitute spritesheet 0
-                })
-              }
-            >
-              edit {tab.sheetPath.split(/[\\/]/).pop()}
-            </button>
-          </div>
-        )}
-        <Player
-          path={tab.anm2Path}
-          skinPath={tab.sheetPath ?? undefined}
-          costumePath={tab.costumeAnm2Path ?? undefined}
-          tabId={tab.id}
-          active={active}
-        />
-      </div>
+      <Player
+        path={tab.anm2Path}
+        skinPath={tab.sheetPath ?? undefined}
+        costumePath={tab.costumeAnm2Path ?? undefined}
+        tabId={tab.id}
+        active={active}
+        title={tab.title}
+        compact={!!tab.editing}
+      />
     );
   }
   if (tab.sheetPath) {

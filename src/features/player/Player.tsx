@@ -6,11 +6,8 @@ import { readText } from "../../lib/fsx/fs";
 import { headAnimFor } from "../../lib/anm2/compose";
 import { loadAnm2Sheets, subscribeSheet } from "../../lib/sheets/store";
 import { useAppStore } from "../../app/store";
-import { PauseIcon, PlayIcon } from "../../app/icons";
+import { OnionIcon, PauseIcon, PencilIcon, PlayIcon } from "../../app/icons";
 import { renderFrame, type SheetMap } from "./render";
-
-const CANVAS_W = 640;
-const CANVAS_H = 420;
 
 interface Loaded {
   anm2: Anm2;
@@ -63,12 +60,16 @@ async function load(
   };
 }
 
+const ZOOMS = [1, 2, 3, 4, 6, 8, 12, 16];
+
 export function Player({
   path,
   skinPath,
   costumePath,
   tabId,
   active = true,
+  title,
+  compact = false,
 }: {
   path: string;
   /** Character skin override (replaces spritesheet 0 + composites the head) */
@@ -79,6 +80,10 @@ export function Player({
   tabId?: string;
   /** Hidden tabs stay mounted but pause their playback clock */
   active?: boolean;
+  /** Display name in the pane header (entity name) */
+  title?: string;
+  /** Split-screen mode: vertical layout with a LIVE PREVIEW header */
+  compact?: boolean;
 }) {
   const setTabEditing = useAppStore((s) => s.setTabEditing);
   const playerJump = useAppStore((s) => s.playerJump);
@@ -92,6 +97,20 @@ export function Player({
   // Bumped when the editor mutates a sheet, to repaint while paused.
   const [sheetRev, setSheetRev] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  // Stage tracks its container so the preview always fills the pane.
+  const [stage, setStage] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el || !loaded) return;
+    const measure = () =>
+      setStage({ w: el.clientWidth, h: el.clientHeight });
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    measure();
+    return () => ro.disconnect();
+  }, [loaded]);
 
   // Live link: repaint when any of this anm2's sheets is edited —
   // including costume overlay sheets.
@@ -182,17 +201,22 @@ export function Player({
     return () => cancelAnimationFrame(raf);
   }, [active, playing, loaded, anim, playbackSpeed]);
 
-  // Repaint on every playhead/zoom/animation change.
+  // Repaint on every playhead/zoom/animation/stage-size change.
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !loaded) return;
+    if (!canvas || !loaded || stage.w === 0 || stage.h === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    const pw = Math.max(1, Math.round(stage.w * dpr));
+    const ph = Math.max(1, Math.round(stage.h * dpr));
+    if (canvas.width !== pw) canvas.width = pw;
+    if (canvas.height !== ph) canvas.height = ph;
     const ctx = canvas.getContext("2d")!;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, stage.w, stage.h);
     ctx.imageSmoothingEnabled = false;
-    // Entity origin at canvas center, slightly below middle (Isaac sprites
+    // Entity origin at stage center, slightly below middle (Isaac sprites
     // hang mostly above their root point).
-    ctx.translate(CANVAS_W / 2, CANVAS_H * 0.62);
+    ctx.translate(stage.w / 2, stage.h * 0.62);
     ctx.scale(zoom, zoom);
     if (anim && anim.frameNum > 0) {
       if (onion && anim.frameNum > 1) {
@@ -229,7 +253,7 @@ export function Player({
         renderFrame(ctx, costume.anm2, cHead, at(cHead), costume.sheets);
       }
     }
-  }, [loaded, anim, headAnim, tick, zoom, sheetRev, onion]);
+  }, [loaded, anim, headAnim, tick, zoom, sheetRev, onion, stage]);
 
   const selectAnim = useCallback((name: string) => {
     setAnimName(name);
@@ -243,140 +267,194 @@ export function Player({
   const { anm2, missing } = loaded;
   const frame = Math.floor(tick);
 
-  return (
-    <div className="player">
-      {missing.length > 0 && (
-        <div className="player-warning">
-          Missing spritesheet{missing.length > 1 ? "s" : ""}:{" "}
-          {missing.join(", ")} (rendered as magenta)
-        </div>
-      )}
-      <div className="player-canvas-wrap checkerboard">
-        <canvas ref={canvasRef} width={CANVAS_W} height={CANVAS_H} />
-      </div>
-      <div className="player-controls">
+  const sheetRow = (
+    id: number,
+    name: string,
+    fullPath: string | undefined,
+    ok: boolean,
+    anm2Path: string,
+  ) => (
+    <div className="sheet-row" key={`${anm2Path}#${id}`}>
+      <span
+        className={`sheet-row-name${ok ? "" : " sheet-row-missing"}`}
+        title={fullPath ?? name}
+      >
+        {name}
+      </span>
+      {ok && tabId !== undefined && fullPath && (
         <button
-          className="player-btn"
-          onClick={() => {
-            if (!playing && anim && tick >= anim.frameNum - 1e-6) setTick(0);
-            setPlaying(!playing);
-          }}
-          disabled={!anim || anim.frameNum <= 0}
-          title={playing ? "Pause" : "Play"}
+          className="rail-btn sheet-edit-btn"
+          title={`Edit ${name}`}
+          onClick={() =>
+            setTabEditing(tabId, {
+              sheetPath: fullPath,
+              anm2Path,
+              sheetId: id,
+            })
+          }
         >
-          {playing ? <PauseIcon /> : <PlayIcon />}
+          <PencilIcon />
         </button>
-        <input
-          type="range"
-          min={0}
-          max={Math.max(0, (anim?.frameNum ?? 1) - 1)}
-          step={1}
-          value={Math.min(frame, Math.max(0, (anim?.frameNum ?? 1) - 1))}
-          onChange={(e) => {
-            setPlaying(false);
-            setTick(Number(e.target.value));
-          }}
-        />
-        <span className="player-frame">
-          {anim && anim.frameNum > 0
-            ? `${Math.min(frame + 1, anim.frameNum)}/${anim.frameNum}`
-            : "–"}
-        </span>
-        <label className="player-zoom">
-          zoom
-          <select value={zoom} onChange={(e) => setZoom(Number(e.target.value))}>
-            {[1, 2, 3, 4, 6, 8].map((z) => (
+      )}
+      {!ok && <span className="sheet-missing-badge">missing</span>}
+    </div>
+  );
+
+  const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
+
+  return (
+    <div className={`player ${compact ? "player-stack" : "player-wide"}`}>
+      <div className="player-stage-col">
+        <div className="player-header">
+          {compact && (
+            <span className="live-badge" title="Mirrors your edits in real time">
+              LIVE PREVIEW
+            </span>
+          )}
+          {title && <span className="player-title">{title}</span>}
+          <span className="toolbar-spacer" />
+          <span className="player-meta">
+            {anm2.animations.length} animations
+          </span>
+        </div>
+        {missing.length > 0 && (
+          <div className="player-warning">
+            Missing spritesheet{missing.length > 1 ? "s" : ""}:{" "}
+            {missing.join(", ")} (rendered as magenta)
+          </div>
+        )}
+        <div className="player-stage checkerboard" ref={stageRef}>
+          <canvas ref={canvasRef} />
+        </div>
+        <div className="player-transport">
+          <button
+            className="player-btn"
+            onClick={() => {
+              if (!playing && anim && tick >= anim.frameNum - 1e-6) setTick(0);
+              setPlaying(!playing);
+            }}
+            disabled={!anim || anim.frameNum <= 0}
+            title={playing ? "Pause" : "Play"}
+          >
+            {playing ? <PauseIcon /> : <PlayIcon />}
+          </button>
+          <input
+            type="range"
+            min={0}
+            max={Math.max(0, (anim?.frameNum ?? 1) - 1)}
+            step={1}
+            value={Math.min(frame, Math.max(0, (anim?.frameNum ?? 1) - 1))}
+            onChange={(e) => {
+              setPlaying(false);
+              setTick(Number(e.target.value));
+            }}
+          />
+          <span className="player-frame">
+            {anim && anim.frameNum > 0
+              ? `${Math.min(frame + 1, anim.frameNum)}/${anim.frameNum}`
+              : "–"}
+          </span>
+          <span className="transport-sep" />
+          <select
+            className="transport-select"
+            title="Preview zoom"
+            value={zoom}
+            onChange={(e) => setZoom(Number(e.target.value))}
+          >
+            {ZOOMS.map((z) => (
               <option key={z} value={z}>
                 {z}×
               </option>
             ))}
           </select>
-        </label>
-        <label className="player-zoom" title="Ghost the previous/next frame">
-          <input
-            type="checkbox"
-            checked={onion}
-            onChange={(e) => setOnion(e.target.checked)}
-          />
-          onion
-        </label>
-        <span className="detail-meta">{anm2.info.fps} fps</span>
+          <button
+            className={`rail-btn${onion ? " active" : ""}`}
+            title="Onion skin — ghost the previous/next frame"
+            onClick={() => setOnion(!onion)}
+          >
+            <OnionIcon />
+          </button>
+          <span className="transport-sep" />
+          <span className="player-fps" title="Animation file frame rate">
+            {anm2.info.fps} fps
+          </span>
+        </div>
       </div>
-      <table className="anim-table">
-        <thead>
-          <tr>
-            <th>Animation</th>
-            <th>Frames</th>
-            <th>Loop</th>
-          </tr>
-        </thead>
-        <tbody>
-          {anm2.animations.map((a, i) => (
-            <tr
-              key={`${a.name}-${i}`}
-              className={a.name === animName ? "anim-row-active" : "anim-row"}
-              onClick={() => selectAnim(a.name)}
-            >
-              <td>
-                {a.name}
-                {a.name === anm2.defaultAnimation && (
-                  <span className="default-badge">default</span>
-                )}
-              </td>
-              <td>{a.frameNum}</td>
-              <td>{a.loop ? "↻" : ""}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <h3>Spritesheets</h3>
-      <ul className="sheet-list">
-        {anm2.content.spritesheets.map((s) => (
-          <li key={s.id}>
-            {s.rawPath}{" "}
-            {loaded.sheets.get(s.id) && tabId !== undefined && (
-              <button
-                className="edit-link"
-                onClick={() =>
-                  setTabEditing(tabId, {
-                    sheetPath: loaded.sheetPaths.get(s.id)!,
-                    anm2Path: path,
-                    sheetId: s.id,
-                  })
-                }
-              >
-                edit
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      {loaded.costume && (
-        <>
-          <h3>Costume sheets (hair / wings / head overlays)</h3>
-          <ul className="sheet-list">
-            {loaded.costume.anm2.content.spritesheets.map((s) => (
-              <li key={s.id}>
-                {s.rawPath}{" "}
-                {loaded.costume!.sheets.get(s.id) && tabId !== undefined && (
-                  <button
-                    className="edit-link"
-                    onClick={() =>
-                      setTabEditing(tabId, {
-                        sheetPath: loaded.costume!.byId.get(s.id)!,
-                        anm2Path: loaded.costume!.path,
-                        sheetId: s.id,
-                      })
+      <aside className="player-panels">
+        <section className="panel panel-anims">
+          <header className="panel-header">
+            Animations
+            <span className="panel-count">{anm2.animations.length}</span>
+          </header>
+          <div className="panel-body">
+            <table className="anim-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th className="anim-col-num">Frames</th>
+                  <th className="anim-col-num" title="Loops">
+                    ↻
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {anm2.animations.map((a, i) => (
+                  <tr
+                    key={`${a.name}-${i}`}
+                    className={
+                      a.name === animName ? "anim-row-active" : "anim-row"
                     }
+                    onClick={() => selectAnim(a.name)}
                   >
-                    edit
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+                    <td>
+                      {a.name}
+                      {a.name === anm2.defaultAnimation && (
+                        <span className="default-badge">default</span>
+                      )}
+                    </td>
+                    <td className="anim-col-num">{a.frameNum}</td>
+                    <td className="anim-col-num">{a.loop ? "↻" : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section className="panel panel-sheets">
+          <header className="panel-header">Sheets</header>
+          <div className="panel-body">
+            {anm2.content.spritesheets.map((s) => {
+              const resolved = loaded.sheetPaths.get(s.id);
+              const ok = !!loaded.sheets.get(s.id);
+              return sheetRow(
+                s.id,
+                baseName(resolved ?? s.rawPath),
+                resolved,
+                ok,
+                path,
+              );
+            })}
+            {loaded.costume && (
+              <>
+                <div className="sheet-group-label">
+                  Costume (hair / wings / head overlays)
+                </div>
+                {loaded.costume.anm2.content.spritesheets.map((s) => {
+                  const resolved = loaded.costume!.byId.get(s.id);
+                  const ok = !!loaded.costume!.sheets.get(s.id);
+                  return sheetRow(
+                    s.id,
+                    baseName(resolved ?? s.rawPath),
+                    resolved,
+                    ok,
+                    loaded.costume!.path,
+                  );
+                })}
+              </>
+            )}
+          </div>
+        </section>
+      </aside>
     </div>
   );
 }
