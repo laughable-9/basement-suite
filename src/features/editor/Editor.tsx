@@ -22,6 +22,7 @@ import {
   EraserIcon,
   GridIcon,
   MoveIcon,
+  PaletteIcon,
   PencilIcon,
   RedoIcon,
   UndoIcon,
@@ -50,13 +51,22 @@ function fromHex(hex: string, a: number): Rgba {
   };
 }
 
-const TOOLS: { id: Tool; icon: () => React.ReactNode; tip: string }[] = [
-  { id: "pencil", icon: PencilIcon, tip: "Pencil (B)" },
-  { id: "eraser", icon: EraserIcon, tip: "Eraser (E)" },
-  { id: "eyedropper", icon: DropperIcon, tip: "Eyedropper (I)" },
-  { id: "pan", icon: MoveIcon, tip: "Pan view (H, or hold Space / middle-drag)" },
-  { id: "inspect", icon: CursorIcon, tip: "Inspect — click a frame rect to jump the player (V)" },
+const TOOLS: {
+  id: Tool;
+  icon: () => React.ReactNode;
+  tip: string;
+  label: string;
+}[] = [
+  { id: "pencil",     icon: PencilIcon,  tip: "Pencil (B)",     label: "Pencil" },
+  { id: "eraser",     icon: EraserIcon,  tip: "Eraser (E)",     label: "Eraser" },
+  { id: "eyedropper", icon: DropperIcon, tip: "Eyedropper (I)", label: "Eyedropper" },
+  { id: "pan",        icon: MoveIcon,    tip: "Pan view (H, or hold Space / middle-drag)", label: "Pan" },
+  { id: "inspect",    icon: CursorIcon,  tip: "Inspect — click a frame rect to jump the player (V)", label: "Inspect" },
 ];
+
+const TOOL_LABEL: Record<Tool, string> = Object.fromEntries(
+  TOOLS.map((t) => [t.id, t.label]),
+) as Record<Tool, string>;
 
 interface EditorProps {
   target: EditingTarget;
@@ -268,6 +278,10 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
       </div>
 
       <div className="editor-options">
+        <span className="opt-tool" title={`Active tool: ${TOOL_LABEL[tool]}`}>
+          {TOOL_LABEL[tool]}
+        </span>
+        <span className="opt-sep" />
         {floating && (
           <span className="opt-hint floating-hint">
             Floating paste — drag to move, corner handles to scale ·{" "}
@@ -339,11 +353,11 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
                 </span>
                 <span className="opt-sep" />
                 <button
-                  className="edit-link"
-                  title="Most-used colors in this sheet"
+                  className="rail-btn opt-icon-btn"
+                  title="Extract sheet palette (most-used colors in this sheet)"
                   onClick={() => setPalette(extractPalette(doc))}
                 >
-                  sheet palette
+                  <PaletteIcon />
                 </button>
                 {palette && (
                   <span className="recent-colors">

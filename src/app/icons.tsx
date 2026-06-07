@@ -186,6 +186,17 @@ export const GearIcon = () =>
 export const FolderIcon = () =>
   svg(<path d="M2 4 C2 3.4 2.4 3 3 3 H6 L7.5 4.8 H13 C13.6 4.8 14 5.2 14 5.8 V12 C14 12.6 13.6 13 13 13 H3 C2.4 13 2 12.6 2 12 Z" />);
 
+export const PaletteIcon = () =>
+  svg(
+    <>
+      <path d="M8 1.8 C4.4 1.8 1.5 4.4 1.5 7.7 C1.5 10.3 3.4 12.2 5.7 12.2 C6.6 12.2 7 11.7 7 11 C7 10.4 6.6 10 7.4 10 H10.4 C12.1 10 13.5 8.6 13.5 6.8 C13.5 4 11 1.8 8 1.8 Z" />
+      <circle cx="4.6" cy="7.2" r="0.85" fill="currentColor" stroke="none" />
+      <circle cx="6.5" cy="4.4" r="0.85" fill="currentColor" stroke="none" />
+      <circle cx="9.6" cy="4.2" r="0.85" fill="currentColor" stroke="none" />
+      <circle cx="11.7" cy="6.6" r="0.85" fill="currentColor" stroke="none" />
+    </>,
+  );
+
 export const OnionIcon = () =>
   svg(
     <>

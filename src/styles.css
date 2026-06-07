@@ -670,6 +670,21 @@ body {
   color: var(--text-dim);
 }
 
+/* Photoshop-style "active tool" label at the head of the options strip */
+.opt-tool {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 0 4px 0 2px;
+  white-space: nowrap;
+}
+
+/* Icon-only options strip button (e.g. extract sheet palette) */
+.opt-icon-btn {
+  width: 26px;
+  height: 22px;
+}
+
 .opt {
   display: flex;
   align-items: center;
