@@ -46,20 +46,34 @@ export async function listMods(modsPath: string): Promise<ModSummary[]> {
   const folders = entries.filter(
     (e) => e.kind === "dir" && !e.name.startsWith("."),
   );
-  return Promise.all(
-    folders.map(async (e) => {
-      const [metadata, files] = await Promise.all([
-        readMetadata(e.path),
-        listModGfxFiles(e.path),
-      ]);
-      return {
-        folderName: e.name,
-        path: e.path,
-        displayName: metadata.name ?? e.name,
-        metadata,
-        files,
-        totalBytes: files.reduce((a, f) => a + f.bytes, 0),
-      };
+  // Per-folder failures (permission denied, malformed XML, transient FS error)
+  // shouldn't blank the whole list — degrade the offending entry instead.
+  const results = await Promise.all(
+    folders.map(async (e): Promise<ModSummary | null> => {
+      try {
+        const [metadata, files] = await Promise.all([
+          readMetadata(e.path),
+          listModGfxFiles(e.path),
+        ]);
+        return {
+          folderName: e.name,
+          path: e.path,
+          displayName: metadata.name ?? e.name,
+          metadata,
+          files,
+          totalBytes: files.reduce((a, f) => a + f.bytes, 0),
+        };
+      } catch {
+        return {
+          folderName: e.name,
+          path: e.path,
+          displayName: e.name,
+          metadata: EMPTY_META,
+          files: [],
+          totalBytes: 0,
+        };
+      }
     }),
   );
+  return results.filter((m): m is ModSummary => m !== null);
 }
