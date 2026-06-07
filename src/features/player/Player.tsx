@@ -142,6 +142,8 @@ export function Player({
   const stageRef = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState({ w: 0, h: 0 });
 
+  // Re-observe on compact toggle: the wide and stack branches render
+  // different DOM trees, so the old observer is attached to a detached node.
   useEffect(() => {
     const el = stageRef.current;
     if (!el || !loaded) return;
@@ -151,7 +153,7 @@ export function Player({
     ro.observe(el);
     measure();
     return () => ro.disconnect();
-  }, [loaded]);
+  }, [loaded, compact]);
 
   // Live link: repaint when any of this anm2's sheets is edited.
   useEffect(() => {
@@ -604,7 +606,7 @@ function SheetThumb({
   useEffect(() => {
     const dst = ref.current;
     if (!dst || !source) return;
-    const SIZE = 36;
+    const SIZE = 64;
     const dpr = window.devicePixelRatio || 1;
     dst.width = SIZE * dpr;
     dst.height = SIZE * dpr;

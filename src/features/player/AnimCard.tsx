@@ -1,10 +1,9 @@
-// One animation in the AnimGrid — rendered thumbnail that plays on hover.
-// Reuses the Home thumb scene + drawThumb pipeline; the base scene is loaded
-// once per tab and shared across all cards, so 39 cards = 1 anm2 parse + 1
-// sheet decode pass, not 39.
+// One animation in the AnimGrid — rendered static thumbnail (first frame).
+// The card's name label is enough to identify it; no hover-play (the user
+// found the moving thumbs distracting and the title is already shown).
+// Live link still wired: editing a sheet redraws the resting thumb.
 
 import { useEffect, useRef } from "react";
-import { useAppStore } from "../../app/store";
 import { subscribeSheet } from "../../lib/sheets/store";
 import { buildAnimScene, drawThumb, type ThumbScene } from "../home/renderThumb";
 
@@ -28,7 +27,6 @@ export function AnimCard({
   onSelect,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef(0);
   const sceneRef = useRef(buildAnimScene(baseScene, animName));
 
   useEffect(() => {
@@ -47,12 +45,11 @@ export function AnimCard({
       canvas.width = Math.max(32, box.clientWidth);
       canvas.height = Math.max(32, box.clientHeight);
       drawThumb(canvas, sceneRef.current!, 0);
-      // Live link: any sheet edit redraws the resting frame.
       for (const p of sceneRef.current!.sheetPaths) {
         unsubs.push(
           subscribeSheet(p, () => {
             if (disposed) return;
-            if (!rafRef.current) drawThumb(canvas, sceneRef.current!, 0);
+            drawThumb(canvas, sceneRef.current!, 0);
           }),
         );
       }
@@ -63,42 +60,14 @@ export function AnimCard({
       disposed = true;
       observer.disconnect();
       unsubs.forEach((u) => u());
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = 0;
     };
   }, [baseScene, animName]);
-
-  function startPlayback() {
-    const canvas = canvasRef.current;
-    const scene = sceneRef.current;
-    if (!canvas || !scene || rafRef.current) return;
-    const start = performance.now();
-    const step = (now: number) => {
-      const speed = useAppStore.getState().playbackSpeed;
-      const t =
-        (((now - start) / 1000) * scene.fps * speed) %
-        Math.max(1, scene.anim.frameNum);
-      drawThumb(canvas, scene, t);
-      rafRef.current = requestAnimationFrame(step);
-    };
-    rafRef.current = requestAnimationFrame(step);
-  }
-
-  function stopPlayback() {
-    cancelAnimationFrame(rafRef.current);
-    rafRef.current = 0;
-    const canvas = canvasRef.current;
-    const scene = sceneRef.current;
-    if (canvas && scene) drawThumb(canvas, scene, 0);
-  }
 
   return (
     <button
       className={`anim-card${selected ? " selected" : ""}`}
       onClick={onSelect}
-      onMouseEnter={startPlayback}
-      onMouseLeave={stopPlayback}
-      title={`${animName} — ${frameNum} frames${loops ? " (loops)" : ""}`}
+      title={animName}
     >
       <span className="anim-card-thumb checkerboard">
         <canvas ref={canvasRef} className="anim-card-canvas" />
@@ -108,7 +77,8 @@ export function AnimCard({
         {isDefault && <span className="default-badge">default</span>}
       </span>
       <span className="anim-card-meta">
-        {frameNum}f{loops ? " ↻" : ""}
+        {frameNum} Frame{frameNum === 1 ? "" : "s"}
+        {loops ? " · loops" : ""}
       </span>
     </button>
   );

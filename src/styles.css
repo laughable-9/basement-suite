@@ -1050,16 +1050,32 @@ body {
   text-overflow: ellipsis;
 }
 
+/* Subtle "REC dot + caps" indicator; no chip background. */
 .live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: #8ce8a0;
-  background: #1d3324;
-  border: 1px solid #3f7a4e;
-  border-radius: 3px;
-  padding: 1px 6px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
   flex-shrink: 0;
+}
+
+.live-badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 5px rgba(196, 80, 56, 0.55);
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
 }
 
 .player-meta {
@@ -1342,14 +1358,14 @@ body {
 .sheet-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 5px 8px 5px 14px;
-  min-height: 44px;
+  gap: 12px;
+  padding: 8px 10px 8px 14px;
+  min-height: 80px;
 }
 
 .sheet-thumb {
-  width: 36px;
-  height: 36px;
+  width: 64px;
+  height: 64px;
   flex-shrink: 0;
   border-radius: 3px;
   overflow: hidden;
