@@ -28,6 +28,14 @@ export interface PlayerJump {
   seq: number;
 }
 
+/** Reverse channel: frame strip click → editor pans to/highlights that frame. */
+export interface EditorJump {
+  tabId: string;
+  animName: string;
+  tick: number;
+  seq: number;
+}
+
 export interface Toast {
   id: number;
   text: string;
@@ -81,6 +89,8 @@ interface AppState {
   setTabEditing: (tabId: string, editing: EditingTarget | null) => void;
   playerJump: PlayerJump | null;
   requestPlayerJump: (tabId: string, animName: string, tick: number) => void;
+  editorJump: EditorJump | null;
+  requestEditorJump: (tabId: string, animName: string, tick: number) => void;
 
   toasts: Toast[];
   addToast: (text: string, kind: Toast["kind"]) => void;
@@ -138,6 +148,11 @@ export const useAppStore = create<AppState>((set) => ({
   requestPlayerJump: (tabId, animName, tick) =>
     set((s) => ({
       playerJump: { tabId, animName, tick, seq: (s.playerJump?.seq ?? 0) + 1 },
+    })),
+  editorJump: null,
+  requestEditorJump: (tabId, animName, tick) =>
+    set((s) => ({
+      editorJump: { tabId, animName, tick, seq: (s.editorJump?.seq ?? 0) + 1 },
     })),
 
   toasts: [],
