@@ -272,6 +272,11 @@ export function fillFlood(
   const data = img.data;
   const s = (startY * w + startX) * 4;
   const tr = data[s], tg = data[s + 1], tb = data[s + 2], ta = data[s + 3];
+  // Filling with the same color is a no-op — skip the scan and the
+  // history entry it would otherwise produce.
+  if (tr === color.r && tg === color.g && tb === color.b && ta === color.a) {
+    return null;
+  }
   const tol2 = tolerance * tolerance * 4;
   const visited = new Uint8Array(w * h);
   const stack: number[] = [startY * w + startX];
@@ -345,6 +350,19 @@ export function lassoSelection(
   for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
   ctx.closePath();
   ctx.fill();
+  // The polygon may be entirely outside the doc (or so thin it rasterizes
+  // to zero pixels at integer resolution). Verify at least one opaque
+  // pixel actually landed inside the clamped bbox before returning a
+  // selection that would otherwise have nothing to act on.
+  const data = ctx.getImageData(minX, minY, w, h).data;
+  let any = false;
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] !== 0) {
+      any = true;
+      break;
+    }
+  }
+  if (!any) return null;
   return { bounds: { x: minX, y: minY, w, h }, mask };
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Rgba } from "../../lib/anm2/types";
 import { CloseIcon } from "../../app/icons";
 
@@ -82,7 +82,8 @@ export function ColorPicker({ initial, title = "Color Picker", onCommit, onCance
   const [alpha, setAlpha] = useState<number>(initial.a);
   const [hexInput, setHexInput] = useState<string>(() => toHex(initial));
 
-  const rgb = hsvToRgb(hsv.h, hsv.s, hsv.v);
+  // Memoize so the Enter/Esc effect below doesn't rebind on every render.
+  const rgb = useMemo(() => hsvToRgb(hsv.h, hsv.s, hsv.v), [hsv.h, hsv.s, hsv.v]);
 
   const svRef = useRef<HTMLCanvasElement>(null);
   const hueRef = useRef<HTMLCanvasElement>(null);
@@ -126,13 +127,16 @@ export function ColorPicker({ initial, title = "Color Picker", onCommit, onCance
     ctx.fillRect(0, 0, w, h);
   }, []);
 
-  // Esc closes
+  // Esc closes. Enter commits — but not while the user is typing into a
+  // numeric input (otherwise Enter inside the R/G/B field commits and
+  // closes the modal, which feels broken).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
         onCancel();
       } else if (e.key === "Enter") {
+        if (e.target instanceof HTMLInputElement) return;
         e.preventDefault();
         onCommit({ ...rgb, a: alpha });
       }
@@ -150,8 +154,11 @@ export function ColorPicker({ initial, title = "Color Picker", onCommit, onCance
     const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
     const s = rect.width === 0 ? 0 : x / rect.width;
     const v = rect.height === 0 ? 0 : 1 - y / rect.height;
-    setHsv((p) => ({ h: p.h, s, v }));
-    setHexInput(toHex(hsvToRgb(hsv.h, s, v)));
+    setHsv((p) => {
+      const next = { h: p.h, s, v };
+      setHexInput(toHex(hsvToRgb(next.h, next.s, next.v)));
+      return next;
+    });
     if (e.type === "pointerdown") {
       (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
     }
@@ -164,8 +171,11 @@ export function ColorPicker({ initial, title = "Color Picker", onCommit, onCance
     const rect = canvas.getBoundingClientRect();
     const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
     const h = rect.height === 0 ? 0 : (y / rect.height) * 360;
-    setHsv((p) => ({ h, s: p.s, v: p.v }));
-    setHexInput(toHex(hsvToRgb(h, hsv.s, hsv.v)));
+    setHsv((p) => {
+      const next = { h, s: p.s, v: p.v };
+      setHexInput(toHex(hsvToRgb(next.h, next.s, next.v)));
+      return next;
+    });
     if (e.type === "pointerdown") {
       (e.currentTarget as HTMLCanvasElement).setPointerCapture(e.pointerId);
     }

@@ -164,12 +164,20 @@ function applyPatch(
       break;
     }
     case "layerReorder": {
-      const fromIdx = dir === "redo" ? patch.from : patch.to;
+      // Find by id and reapply by direction — the recorded `from` index can
+      // drift after eviction or after other ops bookkeep around it, so
+      // trusting the lookup over the captured index keeps undo/redo aligned
+      // with the doc's current layer order.
       const toIdx = dir === "redo" ? patch.to : patch.from;
       const idx = doc.layers.findIndex((l) => l.id === patch.layerId);
-      if (idx !== fromIdx) return;
+      if (idx === -1) return;
+      const target = Math.max(0, Math.min(doc.layers.length - 1, toIdx));
+      if (idx === target) {
+        composite(doc);
+        break;
+      }
       const [layer] = doc.layers.splice(idx, 1);
-      doc.layers.splice(toIdx, 0, layer);
+      doc.layers.splice(target, 0, layer);
       composite(doc);
       break;
     }

@@ -11,7 +11,13 @@ import {
 import { useAppStore, type EditingTarget } from "../../app/store";
 import { cropGrid, type CropRect } from "./cropGrid";
 import { beginStroke, canRedo, canUndo, redo, undo } from "./history";
-import { commitFloating, makeFloating, type Floating } from "./floating";
+import {
+  cancelFloating as cancelFloatingObj,
+  closeSource,
+  commitFloating,
+  makeFloating,
+  type Floating,
+} from "./floating";
 import { extractPalette } from "./palette";
 import { SaveToModDialog } from "../export/SaveToModDialog";
 import { EditorCanvas, type Tool } from "./EditorCanvas";
@@ -261,15 +267,10 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   }, [doc, floating]);
 
   const cancelFloating = useCallback(() => {
-    if (!floating) return;
-    // Floating with a carry-along recorder (Move / Transform) → abort
-    // restores the layer to its pre-cut pixels and pushes nothing.
-    if (floating.recorder) floating.recorder.abort();
-    if ("close" in floating.source && typeof floating.source.close === "function") {
-      floating.source.close();
-    }
+    if (!doc || !floating) return;
+    cancelFloatingObj(doc, floating);
     setFloating(null);
-  }, [floating]);
+  }, [doc, floating]);
 
   /** Lift the selection's pixels off the active layer into a Floating. */
   const beginTransform = useCallback(
@@ -286,10 +287,7 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
         canvas = extractSelection(doc, sel, false);
       }
       const bitmap = await createImageBitmap(canvas);
-      const prev = floating?.source;
-      if (prev && "close" in prev && typeof prev.close === "function") {
-        prev.close();
-      }
+      if (floating?.source) closeSource(floating.source);
       setFloating({
         source: bitmap,
         x: sel.bounds.x,
@@ -350,27 +348,28 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   /**
    * Move tool click — lifts pixels off the active layer and floats them
    * synchronously. Holds an open stroke recorder through the drag so cut
-   * and stamp collapse to one "Move" entry in history. Esc aborts and
-   * restores the original pixels through recorder.abort().
+   * and stamp collapse to one "Move" entry in history. Esc aborts the
+   * recorder (pixels restored) and restores the selection that was active
+   * at lift time, so cancelling a Move feels like nothing happened.
+   *
+   * Returns the new floating object so the caller can arm any pointer
+   * state that depends on it without waiting for the React state flush.
    */
-  const onMoveStart = useCallback(() => {
-    if (!doc) return;
-    if (activeLayer(doc).locked) return;
+  const onMoveStart = useCallback((): Floating | null => {
+    if (!doc) return null;
+    if (activeLayer(doc).locked) return null;
     const bounds = selection?.bounds ?? layerContentBounds(activeLayer(doc));
-    if (!bounds || bounds.w <= 0 || bounds.h <= 0) return;
+    if (!bounds || bounds.w <= 0 || bounds.h <= 0) return null;
     const sel: Selection = selection ?? { bounds, mask: null };
+    if (floating) cancelFloatingObj(doc, floating);
     const rec = beginStroke(doc, "Move");
     rec.touch(bounds.x, bounds.y, bounds.w, bounds.h);
     const canvas = extractSelection(doc, sel, true);
-    floating?.recorder?.abort();
-    if (
-      floating?.source &&
-      "close" in floating.source &&
-      typeof floating.source.close === "function"
-    ) {
-      floating.source.close();
-    }
-    setFloating({
+    const priorSelection = selection;
+    // Clear the marquee outline silently — Esc will put it back, commit
+    // drops it (Photoshop also folds the selection-clear into the Move).
+    previewSelection(doc, null);
+    const next: Floating = {
       source: canvas,
       x: bounds.x,
       y: bounds.y,
@@ -378,8 +377,10 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
       h: bounds.h,
       recorder: rec,
       commitLabel: "Move",
-    });
-    recordSelection(doc, "Deselect", null);
+      priorSelection,
+    };
+    setFloating(next);
+    return next;
   }, [doc, selection, floating]);
 
   /**
@@ -440,10 +441,7 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
       if (!file) return;
       e.preventDefault();
       const bitmap = await createImageBitmap(file);
-      const prev = floating?.source;
-      if (prev && "close" in prev && typeof prev.close === "function") {
-        prev.close();
-      }
+      if (floating?.source) closeSource(floating.source);
       setFloating(makeFloating(bitmap, doc));
       setTool("move");
     };
@@ -561,7 +559,7 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
         )}
         {savedPath && !doc.dirty && (
           <span className="saved-note" title={savedPath}>
-            saved ✓
+            saved
           </span>
         )}
         <span className="toolbar-spacer" />

@@ -72,7 +72,7 @@ export interface EditorCanvasProps {
   /** Move tool gesture — host turns the active layer / selection into a
    *  floating piece synchronously and returns the click offset so this
    *  component can immediately start tracking the drag. */
-  onMoveStart: (docX: number, docY: number) => void;
+  onMoveStart: (docX: number, docY: number) => Floating | null;
 }
 
 type Corner = 0 | 1 | 2 | 3; // TL TR BL BR
@@ -619,11 +619,10 @@ export function EditorCanvas(props: EditorCanvasProps) {
     // Move tool — pick up the active layer / selection and float-drag it.
     if (tool === "move") {
       if (inBounds(p) && !e.altKey) {
-        onMoveStart(p.x, p.y);
-        // After onMoveStart, the host has set floating; arm floatMove so
-        // pointermove drags it immediately on the same gesture.
-        // We use a 1-tick deferral via the next propsRef snapshot.
-        const f = propsRef.current.floating;
+        // onMoveStart returns the new Floating synchronously so we can arm
+        // the drag immediately. Reading propsRef.current.floating would
+        // give the pre-setFloating value — React hasn't re-rendered yet.
+        const f = onMoveStart(p.x, p.y);
         if (f) ptr.floatMove = { dx: p.x - f.x, dy: p.y - f.y };
         return;
       }

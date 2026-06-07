@@ -6,7 +6,12 @@ import {
   beginStroke,
   type StrokeRecorder,
 } from "./history";
-import { activeLayer, type SheetDoc } from "../../lib/sheets/store";
+import {
+  activeLayer,
+  previewSelection,
+  type SheetDoc,
+} from "../../lib/sheets/store";
+import type { Selection } from "./selection";
 
 /** Source can be either an async-decoded ImageBitmap (Ctrl+V paste) or a
  *  synchronous canvas (Move tool, transform). drawImage accepts both. */
@@ -24,10 +29,23 @@ export interface Floating {
   recorder?: StrokeRecorder;
   /** Override the commit's history label. Defaults to "Paste". */
   commitLabel?: string;
+  /** Selection at lift time. Cleared via previewSelection (no history) so
+   *  Esc-cancel can restore it without leaving an orphan "Deselect" patch. */
+  priorSelection?: Selection | null;
 }
 
-function closeSource(s: FloatingSource): void {
+/** Safely release a FloatingSource — ImageBitmaps need close(), canvases don't. */
+export function closeSource(s: FloatingSource): void {
   if ("close" in s && typeof s.close === "function") s.close();
+}
+
+/** Cancel a floating object. Restores the selection that was active at lift
+ *  time (if any) and aborts the carry-along stroke recorder so pixels go
+ *  back to their pre-lift state. */
+export function cancelFloating(doc: SheetDoc, f: Floating): void {
+  f.recorder?.abort();
+  if (f.priorSelection !== undefined) previewSelection(doc, f.priorSelection);
+  closeSource(f.source);
 }
 
 /** Build a floating object from a pasted image, fit inside the sheet. */
