@@ -21,11 +21,75 @@ function svg(path: React.ReactNode, { size = 19 }: IconProps = {}) {
   );
 }
 
-export const PencilIcon = () =>
+/** Brush head + handle. The pixel editor's "pencil" is actually a 1px
+ *  hard brush, hence the rename. */
+export const BrushIcon = () =>
   svg(
     <>
       <path d="M3 13 L3.8 10.2 L11 3 L13 5 L5.8 12.2 Z" />
       <path d="M10 4 L12 6" />
+    </>,
+  );
+
+/** Legacy alias for the (renamed) brush. Kept so other callers don't break
+ *  if they import PencilIcon by name from external code. */
+export const PencilIcon = BrushIcon;
+
+/** Rectangle marquee — Photoshop's M tool. */
+export const MarqueeIcon = () =>
+  svg(
+    <>
+      <path d="M2 3 H4 M6 3 H8 M10 3 H12 M13 3 V5 M13 7 V9 M13 11 V13 M11 13 H9 M7 13 H5 M3 13 V11 M3 9 V7 M3 5 V3" />
+    </>,
+  );
+
+/** Magic wand — Photoshop's W tool. */
+export const WandIcon = () =>
+  svg(
+    <>
+      <path d="M11 3.5 L13 5.5 L5 13.5 L3 11.5 Z" />
+      <path d="M9 5.5 L11 7.5" />
+      <path d="M11 1.5 V2.5 M13.5 4 H14.5 M13.2 1.5 L12.5 2.2" />
+    </>,
+  );
+
+/** Move tool — Photoshop's V tool. Arrow + crosshair. */
+export const MoveToolIcon = () =>
+  svg(
+    <>
+      <path d="M3 4 L3 12 L5.5 9.5 L7 13 L8.5 12.5 L7 9 L10 9 Z" />
+    </>,
+  );
+
+/** Closed padlock — used for layer-lock UI. */
+export const LockIcon = () =>
+  svg(
+    <>
+      <rect x="4" y="7" width="8" height="7" rx="0.8" />
+      <path d="M6 7 V5.5 C6 4.1 7 3 8 3 C9 3 10 4.1 10 5.5 V7" />
+      <circle cx="8" cy="10.5" r="0.7" fill="currentColor" stroke="none" />
+    </>,
+  );
+
+/** Open padlock — alternative state for the layer-lock UI. */
+export const UnlockIcon = () =>
+  svg(
+    <>
+      <rect x="4" y="7" width="8" height="7" rx="0.8" />
+      <path d="M6 7 V5.5 C6 4.1 7 3 8 3 C9 3 10 4.1 10 5.5" />
+      <circle cx="8" cy="10.5" r="0.7" fill="currentColor" stroke="none" />
+    </>,
+  );
+
+/** Free transform — Ctrl+T action; surfaced as a tooltip hint and key. */
+export const TransformIcon = () =>
+  svg(
+    <>
+      <rect x="2.5" y="2.5" width="11" height="11" rx="0.5" />
+      <rect x="1.5" y="1.5" width="2" height="2" fill="currentColor" stroke="none" />
+      <rect x="12.5" y="1.5" width="2" height="2" fill="currentColor" stroke="none" />
+      <rect x="1.5" y="12.5" width="2" height="2" fill="currentColor" stroke="none" />
+      <rect x="12.5" y="12.5" width="2" height="2" fill="currentColor" stroke="none" />
     </>,
   );
 
@@ -286,6 +350,32 @@ export const SteamIcon = () => (
 /** New / plus action. */
 export const PlusIcon = () =>
   svg(<path d="M8 3 V13 M3 8 H13" strokeWidth="1.7" />);
+
+/** Open eye — visible layer state. */
+export const EyeIcon = () =>
+  svg(
+    <>
+      <path d="M1.5 8 C3.5 4.5 5.5 3 8 3 C10.5 3 12.5 4.5 14.5 8 C12.5 11.5 10.5 13 8 13 C5.5 13 3.5 11.5 1.5 8 Z" />
+      <circle cx="8" cy="8" r="2.2" />
+    </>,
+  );
+
+/** Closed eye (eye-slash) — hidden layer state. */
+export const EyeOffIcon = () =>
+  svg(
+    <>
+      <path d="M2.5 5.5 C4 4 6 3 8 3 C10.5 3 12.5 4.5 14.5 8 C13.7 9.4 12.8 10.5 11.9 11.3" />
+      <path d="M10.4 12.3 C9.6 12.7 8.8 13 8 13 C5.5 13 3.5 11.5 1.5 8 C2 7.1 2.6 6.3 3.2 5.7" />
+      <path d="M2 2 L14 14" strokeWidth="1.4" />
+    </>,
+  );
+
+/** Up / down chevrons for reordering. */
+export const ChevronUpIcon = () =>
+  svg(<path d="M3 10 L8 5 L13 10" strokeWidth="1.7" />);
+
+export const ChevronDownIcon = () =>
+  svg(<path d="M3 6 L8 11 L13 6" strokeWidth="1.7" />);
 
 export const PauseIcon = () =>
   svg(
