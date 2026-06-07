@@ -16,6 +16,16 @@ Basement Suite: a desktop app (Tauri 2 + React + TypeScript + Vite) combining a 
 - The game directory (`isaacPath`, including `extracted_resources/`) is **strictly read-only**. Writes are allowed only inside this repo and `modsPath`.
 - Never copy game PNGs or `.anm2` files into the repo or stage them in git — they are copyrighted. Test fixtures load from `extractedResourcesPath` at test time; throwaway local copies go in the gitignored `assets-cache/`.
 
+## UI style — Photoshop for Isaac
+
+The aesthetic target is **a professional Adobe Photoshop-style desktop tool, dedicated to Isaac sprite modding**. Default to Photoshop's panel chrome, not a web app's:
+
+- Dark muted palette (current vars), thin 1px borders, dense panels, **no emoji buttons** anywhere.
+- Icon-first tool/category rails (16px stroke SVGs in `app/icons.tsx`); keyboard shortcuts surfaced in tooltips, not labels.
+- Avoid bright "web app" affordances: solid green/blue chip badges, gradient buttons, rounded pill labels, decorative shadows. State indicators should be subtle (a 6–8px dot, a 1px accent border, dim caps text) — not chips with colored backgrounds.
+- Real text labels for real things: "75 Frames" not "75f"; tooltips are full sentences. The product is *for editing*, so the controls (transport, sheets, tools) are the focus; previews are reference, not centerpiece (unless explicitly in live-edit mode).
+- Verify look in-app via screenshots before declaring a UI task done. The user takes screenshots themselves — provide a concrete checklist of what to look at.
+
 ## Architecture (from PLAN.md, binding once scaffolded)
 
 - `src/lib/anm2/` must stay **pure TS with no Tauri imports** (string in, parsed data out) so parser tests run in plain vitest/Node.
