@@ -1,4 +1,7 @@
-# Basement Suite
+<h1>
+  <img src="public/icon.png" alt="" width="40" height="40" align="left" style="margin-right: 10px; vertical-align: middle">
+  Basement Suite
+</h1>
 
 A desktop **Photoshop-for-Isaac** — a multi-layer pixel-art editor and a live `.anm2` animation previewer, side by side. Paint into a sprite layer in one pane, watch the animation re-render in the other, and save straight into a mod folder. Built specifically to make sprite modding for *The Binding of Isaac: Repentance* less painful.
 
@@ -95,7 +98,7 @@ That's it. The Home tab populates as the catalog finishes building (~5 seconds o
 
 ## Tech
 
-Tauri 2 · React · TypeScript · Vite · Canvas 2D. The Rust side is a thin, capability-scoped file I/O shell (`fs` plugin, `dialog` plugin); everything else is TypeScript. The anm2 parser is pure, lenient by design, and unit-tested against the entire shipped game corpus (2,199 files, every landmine documented in `SCAN_REPORT.md`).
+Tauri 2 · React · TypeScript · Vite · Canvas 2D. The Rust side is a thin, capability-scoped file I/O shell (`fs` plugin, `dialog` plugin); everything else is TypeScript. The anm2 parser is pure, lenient by design, and unit-tested against the entire shipped game corpus (2,199 files).
 
 ## Asset policy
 

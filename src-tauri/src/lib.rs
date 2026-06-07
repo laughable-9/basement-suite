@@ -1,5 +1,5 @@
-// Keep the Rust surface minimal (PLAN.md): plugins only, no custom commands yet.
-// File access rules are enforced by capabilities/default.json — read-only until M3.
+// Keep the Rust surface minimal: plugins only, no custom commands yet.
+// File access rules are enforced by capabilities/default.json.
 
 pub fn run() {
     tauri::Builder::default()

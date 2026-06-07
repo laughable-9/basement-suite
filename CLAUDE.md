@@ -6,9 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Basement Suite: a desktop app (Tauri 2 + React + TypeScript + Vite) combining a pixel art editor with a live `.anm2` animation previewer for modding The Binding of Isaac: Repentance. Edit a spritesheet in one pane, watch the animation re-render live in the other, save into a mod folder.
 
-**Current status: MVP (M0–M4) + UI redesign (U1–U5) + Mod Manager (M6) complete.** Semantic catalog browser (categories from the game's XML indexes), document tabs with per-tab editor/player state, rendered hover-animated thumbnails, character compositing (skin + head + costume + skinColor variants), settings popover. Frame strip + loop toggle in the player. Mod manager tab next to Home: per-mod metadata + file tree, side-by-side and overlay-slider diff (vanilla vs modded), active-mod overlay so modded sprites appear in the preview, dirty-state guards on tab-close + mod-switch, hard delete + copy-path. All verified in-game. Work continues on the `dev` branch (GitHub: laughable-9/basement-suite; never push/merge to main without explicit consent). Read these before doing anything:
-- `SCAN_REPORT.md` — empirical findings from scanning the game's 2,199 anm2 / 8,290 PNG files: real schema, attribute ranges, and a list of landmines in shipped game data (garbage FPS values, uint32-wrapped negative crops, missing `<Info>` elements, broken refs). Do not re-scan the game tree; the answers are here.
-- `PLAN.md` — approved architecture, repo structure, milestones M0–M4 with acceptance criteria, and the TypeScript data model for parsed anm2 files.
+**Current status: v0.1.0 published** on the Releases page (Windows MSI + NSIS). Semantic catalog browser, document tabs with per-tab editor/player state, rendered thumbnails, character compositing (skin + head + costume + skinColor variants), first-run setup wizard. Frame strip + loop toggle in the player. Multi-layer editor with Move/Brush/Eraser/Eyedropper/Fill/Marquee/Lasso/Wand/Pan tools, mirror brush, Free Transform, Photoshop-style Color Picker + FG/BG widget, drag-to-reorder layers, merge down, History panel with click-to-jump. Mod manager: per-mod metadata + file tree, side-by-side and overlay-slider diff, active-mod overlay so modded sprites appear in the preview, dirty-state guards. All verified in-game. Work continues on the `dev` branch (GitHub: laughable-9/basement-suite; never push/merge to main without explicit consent).
 
 ## Hard rules
 
@@ -27,12 +25,12 @@ The aesthetic target is **a professional Adobe Photoshop-style desktop tool, ded
 - Real text labels for real things: "75 Frames" not "75f"; tooltips are full sentences. The product is *for editing*, so the controls (transport, sheets, tools) are the focus; previews are reference, not centerpiece (unless explicitly in live-edit mode).
 - Verify look in-app via screenshots before declaring a UI task done. The user takes screenshots themselves — provide a concrete checklist of what to look at.
 
-## Architecture (from PLAN.md, binding once scaffolded)
+## Architecture
 
 - `src/lib/anm2/` must stay **pure TS with no Tauri imports** (string in, parsed data out) so parser tests run in plain vitest/Node.
 - Rust surface stays minimal: Tauri fs plugin + scoped capabilities (extracted tree read-only, mods read-write); avoid custom Rust commands unless the plugin API can't do it.
 - Path resolution is an ordered overlay (mod tree → extracted tree), normalizing `\`/`/` and case — anm2 spritesheet paths resolve relative to the anm2's own directory.
-- The anm2 parser must be lenient and clamping, never throwing on shipped-game data; each landmine in SCAN_REPORT §3 is a required unit test.
+- The anm2 parser must be lenient and clamping, never throwing on shipped-game data. The existing corpus test (`src/test/corpus.test.ts`) round-trips all ~2,199 shipped anm2 files; that's the authority on what the parser must tolerate.
 - Renderer z-order = per-animation `<LayerAnimation>` declaration order (first = bottom), **not** layer Id order.
 - Character rendering is a composite the engine performs and we replicate: player anm2 body anim + separate Head* anim + costume anm2 (costumes2.xml, type="none") matched by state name, with skinColor → `_red/_black/…` skin file variants (see `lib/anm2/compose.ts`, `features/home/renderThumb.ts`).
 - The semantic catalog (`lib/catalog/`) parses entities2/items/players/costumes2.xml — all names are localization keys decoded via `lib/catalog/names.ts`; entity keys need id.variant.subtype (collisions otherwise).

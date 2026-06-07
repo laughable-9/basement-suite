@@ -1,5 +1,6 @@
-// Parsed anm2 data model (PLAN.md §6). Values are post-clamping: parsers
-// normalize the corpus landmines (SCAN_REPORT §3) so consumers never see them.
+// Parsed anm2 data model. Values are post-clamping: parsers normalize
+// the corpus landmines (negative uint-wrapped crops, missing <Info>, FPS
+// outliers, etc.) so consumers never see them.
 
 export interface Anm2 {
   info: { fps: number; version: number; createdBy: string; createdOn: string };
