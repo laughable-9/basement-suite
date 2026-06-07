@@ -6,6 +6,7 @@ import { readFile } from "@tauri-apps/plugin-fs";
 import type { Anm2 } from "../anm2/types";
 import { overlayPath } from "../fsx/modOverlay";
 import { dirname, resolveRelative } from "../fsx/resolve";
+import { registerSheetPath } from "./dirty";
 
 /** Spritesheet pixel sources by spritesheet id; null = file missing. */
 export type SheetMap = Map<number, HTMLCanvasElement | null>;
@@ -46,6 +47,7 @@ export async function getSheetDoc(path: string): Promise<SheetDoc> {
     dirty: false,
   };
   docs.set(path, doc);
+  registerSheetPath(path);
   return doc;
 }
 
