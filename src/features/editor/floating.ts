@@ -3,7 +3,7 @@
 // the downscale to sheet resolution is what pixelizes it.
 
 import { beginStroke } from "./history";
-import type { SheetDoc } from "../../lib/sheets/store";
+import { activeLayer, type SheetDoc } from "../../lib/sheets/store";
 
 export interface Floating {
   source: ImageBitmap;
@@ -39,13 +39,14 @@ export function commitFloating(doc: SheetDoc, f: Floating): void {
   const w = Math.max(1, Math.round(f.w));
   const h = Math.max(1, Math.round(f.h));
 
-  const rec = beginStroke(doc);
+  const rec = beginStroke(doc, "Paste");
+  const ctx = activeLayer(doc).ctx;
   // High-quality downsample onto the sheet's grid: each target pixel becomes
   // an area average of the source — this IS the pixelization step.
-  doc.ctx.imageSmoothingEnabled = true;
-  doc.ctx.imageSmoothingQuality = "high";
-  doc.ctx.drawImage(f.source, x, y, w, h);
-  doc.ctx.imageSmoothingEnabled = false;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(f.source, x, y, w, h);
+  ctx.imageSmoothingEnabled = false;
   rec.touch(x, y, w, h);
   rec.commit();
   f.source.close();
