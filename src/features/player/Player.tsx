@@ -12,7 +12,13 @@ import { headAnimFor } from "../../lib/anm2/compose";
 import { sheetNamesUsedByAnim } from "../../lib/anm2/sheetsUsed";
 import { loadAnm2Sheets, subscribeSheet } from "../../lib/sheets/store";
 import { useAppStore } from "../../app/store";
-import { OnionIcon, PauseIcon, PencilIcon, PlayIcon } from "../../app/icons";
+import {
+  LoopIcon,
+  OnionIcon,
+  PauseIcon,
+  PencilIcon,
+  PlayIcon,
+} from "../../app/icons";
 import { renderFrame, type SheetMap } from "./render";
 import { AnimGrid, type AnimItem } from "./AnimGrid";
 import type { ThumbScene } from "../home/renderThumb";
@@ -140,6 +146,9 @@ export function Player({
   const [playing, setPlaying] = useState(true);
   const [zoom, setZoom] = useState<number | "fit">("fit");
   const [onion, setOnion] = useState(false);
+  // Preview-only loop: keeps single-shot anims (Death, Hit) cycling so the
+  // user can study the motion. Decoupled from the anm2's own loop flag.
+  const [forceLoop, setForceLoop] = useState(true);
   const [tick, setTick] = useState(0);
   const [sheetRev, setSheetRev] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -268,22 +277,23 @@ export function Player({
       animSource === "costume" && loaded.costume
         ? loaded.costume.anm2.info.fps
         : loaded.anm2.info.fps;
+    const effectiveLoop = anim.loop || forceLoop;
     const step = (now: number) => {
       const dt = ((now - last) / 1000) * fps * playbackSpeed;
       last = now;
       setTick((t) => {
         const t2 = t + dt;
-        if (!anim.loop && t2 >= anim.frameNum) {
+        if (!effectiveLoop && t2 >= anim.frameNum) {
           setPlaying(false);
           return anim.frameNum - 1e-6;
         }
-        return normalizeTime(t2, anim.frameNum, anim.loop);
+        return normalizeTime(t2, anim.frameNum, effectiveLoop);
       });
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [active, playing, loaded, anim, animSource, playbackSpeed]);
+  }, [active, playing, loaded, anim, animSource, playbackSpeed, forceLoop]);
 
   // Banner stage repaint
   useEffect(() => {
@@ -495,6 +505,17 @@ export function Player({
         onClick={() => setOnion(!onion)}
       >
         <OnionIcon />
+      </button>
+      <button
+        className={`rail-btn${forceLoop ? " active" : ""}`}
+        title={
+          anim?.loop
+            ? "This animation loops in-game"
+            : "Loop in preview (in-game it plays once)"
+        }
+        onClick={() => setForceLoop(!forceLoop)}
+      >
+        <LoopIcon />
       </button>
       <span className="transport-sep" />
       <span className="player-fps" title="Animation file frame rate">

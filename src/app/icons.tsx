@@ -197,6 +197,16 @@ export const PaletteIcon = () =>
     </>,
   );
 
+export const LoopIcon = () =>
+  svg(
+    <>
+      <path d="M3.2 9 A4.8 4.8 0 0 1 12.4 6.6" />
+      <path d="M9.8 4.4 L12.4 6.6 L10.2 9.2" />
+      <path d="M12.8 7 A4.8 4.8 0 0 1 3.6 9.4" />
+      <path d="M6.2 11.6 L3.6 9.4 L5.8 6.8" />
+    </>,
+  );
+
 export const OnionIcon = () =>
   svg(
     <>
