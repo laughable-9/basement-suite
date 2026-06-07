@@ -156,7 +156,7 @@ export function Player({
   // Preview-only loop: keeps single-shot anims (Death, Hit) cycling so the
   // user can study the motion. Decoupled from the anm2's own loop flag.
   const [forceLoop, setForceLoop] = useState(true);
-  const [showStrip, setShowStrip] = useState(false);
+  const [showStrip, setShowStrip] = useState(true);
   const [tick, setTick] = useState(0);
   const [sheetRev, setSheetRev] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
