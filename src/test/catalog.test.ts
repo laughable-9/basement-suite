@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { buildCatalog, searchCatalog } from "../lib/catalog/build";
+import type { Catalog } from "../lib/catalog/types";
 import {
   hasGameFixtures,
   listGfxRelative,
@@ -161,12 +162,19 @@ describe("buildCatalog (synthetic)", () => {
 });
 
 describe.skipIf(!hasGameFixtures)("buildCatalog (real game data)", () => {
-  const catalog = buildCatalog({
-    entities2Xml: readResourceText("entities2.xml"),
-    itemsXml: readResourceText("items.xml"),
-    playersXml: readResourceText("players.xml"),
-    costumes2Xml: readResourceText("costumes2.xml"),
-    gfxFiles: listGfxRelative(),
+  // describe.skipIf only skips the it() blocks — the describe body still
+  // evaluates, so the fixture reads have to be deferred into beforeAll
+  // (which IS gated by the skip), otherwise CI without the corpus throws
+  // "game fixtures unavailable" at module load.
+  let catalog: Catalog;
+  beforeAll(() => {
+    catalog = buildCatalog({
+      entities2Xml: readResourceText("entities2.xml"),
+      itemsXml: readResourceText("items.xml"),
+      playersXml: readResourceText("players.xml"),
+      costumes2Xml: readResourceText("costumes2.xml"),
+      gfxFiles: listGfxRelative(),
+    });
   });
   const by = (cat: string, sub?: string | null) =>
     catalog.entries.filter(
