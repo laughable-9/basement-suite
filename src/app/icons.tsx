@@ -207,6 +207,14 @@ export const LoopIcon = () =>
     </>,
   );
 
+export const FilmStripIcon = () =>
+  svg(
+    <>
+      <rect x="2" y="4" width="12" height="8" rx="1" />
+      <path d="M5 4 V12 M8 4 V12 M11 4 V12" />
+    </>,
+  );
+
 export const OnionIcon = () =>
   svg(
     <>

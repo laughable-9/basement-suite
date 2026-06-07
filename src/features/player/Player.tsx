@@ -13,6 +13,7 @@ import { sheetNamesUsedByAnim } from "../../lib/anm2/sheetsUsed";
 import { loadAnm2Sheets, subscribeSheet } from "../../lib/sheets/store";
 import { useAppStore } from "../../app/store";
 import {
+  FilmStripIcon,
   LoopIcon,
   OnionIcon,
   PauseIcon,
@@ -21,6 +22,7 @@ import {
 } from "../../app/icons";
 import { renderFrame, type SheetMap } from "./render";
 import { AnimGrid, type AnimItem } from "./AnimGrid";
+import { FrameStrip } from "./FrameStrip";
 import type { ThumbScene } from "../home/renderThumb";
 
 /** Where a selected animation lives — drives the banner render path. */
@@ -140,6 +142,7 @@ export function Player({
 }) {
   const setTabEditing = useAppStore((s) => s.setTabEditing);
   const playerJump = useAppStore((s) => s.playerJump);
+  const requestEditorJump = useAppStore((s) => s.requestEditorJump);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [animName, setAnimName] = useState("");
@@ -149,6 +152,7 @@ export function Player({
   // Preview-only loop: keeps single-shot anims (Death, Hit) cycling so the
   // user can study the motion. Decoupled from the anm2's own loop flag.
   const [forceLoop, setForceLoop] = useState(true);
+  const [showStrip, setShowStrip] = useState(false);
   const [tick, setTick] = useState(0);
   const [sheetRev, setSheetRev] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -517,6 +521,13 @@ export function Player({
       >
         <LoopIcon />
       </button>
+      <button
+        className={`rail-btn${showStrip ? " active" : ""}`}
+        title="Frame strip — every frame side-by-side, click to seek"
+        onClick={() => setShowStrip(!showStrip)}
+      >
+        <FilmStripIcon />
+      </button>
       <span className="transport-sep" />
       <span className="player-fps" title="Animation file frame rate">
         {anm2.info.fps} fps
@@ -598,6 +609,16 @@ export function Player({
     </aside>
   );
 
+  // Strip → seek (pause) + ping the editor if it's open on a sheet that
+  // contributes to this animation. The editor's effect resolves the rect.
+  const onStripSeek = (frame: number) => {
+    setTick(frame);
+    setPlaying(false);
+    if (tabId !== undefined && anim) {
+      requestEditorJump(tabId, anim.name, frame);
+    }
+  };
+
   // Banner: preview stage + transport row + animation info.
   // Header (entity name + live badge in compact) is rendered above the banner.
   const banner = (
@@ -633,6 +654,31 @@ export function Player({
     </div>
   );
 
+  // Memoed so 75+ thumbnail effects don't tear down each render. Player
+  // anims compose with the costume; costume-exclusive anims render alone.
+  const stripCostume = useMemo(
+    () =>
+      animSource === "player" && loaded.costume
+        ? { anm2: loaded.costume.anm2, sheets: loaded.costume.sheets }
+        : null,
+    [animSource, loaded.costume],
+  );
+
+  // Reused in both modes — the strip lives directly below the banner.
+  const stripEl =
+    showStrip && anim && renderAnm2 && renderSheets ? (
+      <FrameStrip
+        anm2={renderAnm2}
+        anim={anim}
+        sheets={renderSheets}
+        headAnim={animSource === "player" ? headAnim : null}
+        costume={stripCostume}
+        bounds={bounds}
+        currentFrame={frame}
+        onSeek={onStripSeek}
+      />
+    ) : null;
+
   // Compact (live edit) mode: vertical with big preview on top.
   // Animation switcher stays as a compact text list to keep the live edit
   // pane focused on watching the preview.
@@ -648,6 +694,7 @@ export function Player({
           </span>
         </div>
         {banner}
+        {stripEl}
         <div className="player-stack-panels">
           <section className="player-anims-list">
             <header className="panel-header">
@@ -701,6 +748,7 @@ export function Player({
           </span>
         </div>
         {banner}
+        {stripEl}
         <header className="anim-grid-header">
           <span>ANIMATIONS</span>
           <span className="panel-count">{gridItems.length}</span>

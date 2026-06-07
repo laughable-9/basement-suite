@@ -1265,6 +1265,65 @@ body {
   padding: 3px 4px;
 }
 
+/* Film-strip view of every frame in the current animation. Horizontal
+   scroll, capped height. Clicking a thumb seeks the player and (if the
+   editor is open on a participating sheet) pans the editor to the rect. */
+.frame-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 8px 12px;
+  background: var(--bg-raised);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.frame-thumb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 3px 4px 4px;
+  cursor: pointer;
+  color: var(--text-dim);
+  font: inherit;
+  flex-shrink: 0;
+}
+
+.frame-thumb:hover {
+  border-color: var(--border-soft);
+  color: var(--text);
+}
+
+.frame-thumb.active {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.frame-thumb-canvas-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 3px;
+  overflow: hidden;
+  display: block;
+}
+
+.frame-thumb-canvas-wrap canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.frame-thumb-index {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
 /* Animation card grid (replaces the animations table in normal mode) */
 .anim-grid-header {
   display: flex;

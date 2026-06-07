@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseAnm2 } from "../../lib/anm2/parse";
-import type { Rgba } from "../../lib/anm2/types";
+import type { Anm2, Rgba } from "../../lib/anm2/types";
 import { readText } from "../../lib/fsx/fs";
 import { dirname, resolveRelative } from "../../lib/fsx/resolve";
 import {
@@ -16,6 +16,7 @@ import { extractPalette } from "./palette";
 import { SaveToModDialog } from "../export/SaveToModDialog";
 import { EditorCanvas, type Tool } from "./EditorCanvas";
 import { findSharedSheetInfo } from "./sharedSheet";
+import { rectAtFrame } from "./rectAtFrame";
 import {
   CloseIcon,
   CursorIcon,
@@ -98,10 +99,19 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   // Dismissal is per-sheet: closing the warning on Azazel's head sheet won't
   // suppress it when the user later opens ghost.png.
   const [dismissedFor, setDismissedFor] = useState<string | null>(null);
+  const editorJump = useAppStore((s) => s.editorJump);
 
   const [doc, setDoc] = useState<SheetDoc | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [rects, setRects] = useState<CropRect[]>([]);
+  // Frame-strip → editor jump needs the parsed anm2 to resolve
+  // (animation, tick) → crop rect via rectAtFrame.
+  const [parsed, setParsed] = useState<{
+    anm2: Anm2;
+    sheetId: number;
+  } | null>(null);
+  // Highlighted rect (from a frame-strip click); auto-clears after ~1.4s.
+  const [highlightRect, setHighlightRect] = useState<CropRect | null>(null);
   const [tool, setTool] = useState<Tool>("pencil");
   const [brushSize, setBrushSize] = useState(1);
   const [color, setColor] = useState<Rgba>({ r: 255, g: 255, b: 255, a: 255 });
@@ -121,6 +131,7 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
     setDoc(null);
     setError(null);
     setRects([]);
+    setParsed(null);
 
     getSheetDoc(target.sheetPath).then(async (d) => {
       if (cancelled) return;
@@ -139,8 +150,10 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
               target.sheetPath.replace(/\\/g, "/").toLowerCase(),
           )?.id;
         }
-        if (sheetId !== undefined && !cancelled)
+        if (sheetId !== undefined && !cancelled) {
           setRects(cropGrid(anm2, sheetId));
+          setParsed({ anm2, sheetId });
+        }
       } catch {
         // Grid is optional decoration — a broken anm2 shouldn't kill the editor.
       }
@@ -155,6 +168,30 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
     if (!doc) return;
     return subscribeSheet(doc.path, () => setRev((r) => r + 1));
   }, [doc]);
+
+  // Frame strip → editor: resolve the rect for the clicked frame on this
+  // sheet, hand it to the canvas for pan + highlight. Each jump seq is
+  // consumed once so a stale request can't re-fire after target swap.
+  const consumedEditorJumpRef = useRef(0);
+  useEffect(() => {
+    if (!editorJump || !parsed) return;
+    if (editorJump.tabId !== tabId) return;
+    if (editorJump.seq === consumedEditorJumpRef.current) return;
+    consumedEditorJumpRef.current = editorJump.seq;
+    const rect = rectAtFrame(
+      parsed.anm2,
+      editorJump.animName,
+      parsed.sheetId,
+      Math.floor(editorJump.tick),
+      rects,
+    );
+    if (rect) {
+      setHighlightRect(rect);
+      // Auto-clear so the bright outline doesn't stick forever.
+      const id = window.setTimeout(() => setHighlightRect(null), 1400);
+      return () => window.clearTimeout(id);
+    }
+  }, [editorJump, parsed, rects, tabId]);
 
   const pushRecent = useCallback((c: Rgba) => {
     setRecent((rs) => {
@@ -493,6 +530,7 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
             onPick={onPick}
             rects={rects}
             showGrid={showGrid}
+            highlightRect={highlightRect}
             onJump={onJump}
             onStrokeEnd={onStrokeEnd}
             zoom={zoom}

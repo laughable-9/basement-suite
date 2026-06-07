@@ -18,6 +18,8 @@ export interface EditorCanvasProps {
   onPick: (color: Rgba) => void;
   rects: CropRect[];
   showGrid: boolean;
+  /** Frame-strip → editor: pan to and highlight this rect when it changes */
+  highlightRect: CropRect | null;
   onJump: (rect: CropRect) => void;
   onStrokeEnd: () => void;
   zoom: number;
@@ -81,6 +83,21 @@ export function EditorCanvas(props: EditorCanvasProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.doc]);
 
+  // Frame-strip → editor: pan so the highlighted rect sits in the viewport
+  // center. Zoom stays where the user set it; if the rect would clip we
+  // still center on its midpoint and let the user zoom out.
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    const rect = props.highlightRect;
+    if (!wrap || !rect) return;
+    const cx = (rect.x + rect.w / 2) * props.zoom;
+    const cy = (rect.y + rect.h / 2) * props.zoom;
+    panRef.current = {
+      x: wrap.clientWidth / 2 - cx,
+      y: wrap.clientHeight / 2 - cy,
+    };
+  }, [props.highlightRect, props.zoom]);
+
   // Continuous redraw: cheap (one drawImage + rect strokes) and immune to
   // missed invalidations from strokes/zoom/sheet mutations.
   useEffect(() => {
@@ -93,8 +110,16 @@ export function EditorCanvas(props: EditorCanvasProps) {
       if (canvas.width !== wrap.clientWidth) canvas.width = wrap.clientWidth;
       if (canvas.height !== wrap.clientHeight) canvas.height = wrap.clientHeight;
 
-      const { doc, rects, showGrid, zoom, tool, brushSize, floating } =
-        propsRef.current;
+      const {
+        doc,
+        rects,
+        showGrid,
+        highlightRect,
+        zoom,
+        tool,
+        brushSize,
+        floating,
+      } = propsRef.current;
       const pan = panRef.current;
       const ctx = canvas.getContext("2d")!;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -134,6 +159,21 @@ export function EditorCanvas(props: EditorCanvasProps) {
             ctx.fillText(text, sx + 3, sy + 10);
           }
         }
+      }
+
+      // Strip-driven highlight: thick accent outline over the active rect.
+      // Drawn unconditionally (even with grid off) so a strip seek still
+      // shows the user where the edit lands.
+      if (highlightRect) {
+        const r = highlightRect;
+        const sx = pan.x + r.x * zoom;
+        const sy = pan.y + r.y * zoom;
+        const sw = r.w * zoom;
+        const sh = r.h * zoom;
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(196,80,56,0.95)";
+        ctx.strokeRect(sx, sy, sw, sh);
+        ctx.lineWidth = 1;
       }
 
       if (floating) {
