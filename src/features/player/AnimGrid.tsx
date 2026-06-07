@@ -7,8 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { AnimCard } from "./AnimCard";
 import type { ThumbScene } from "../home/renderThumb";
 
-const CARD_W = 132;
-const CARD_H = 172;
+const CARD_W = 144;
+const CARD_H = 196;
 const OVERSCAN_ROWS = 2;
 
 export interface AnimItem {
@@ -18,6 +18,8 @@ export interface AnimItem {
   frameNum: number;
   loops: boolean;
   isDefault: boolean;
+  /** Display basenames of spritesheets this animation references */
+  sheets: string[];
 }
 
 interface Props {
@@ -89,6 +91,7 @@ export function AnimGrid({ items, selectedName, onSelect }: Props) {
               frameNum={item.frameNum}
               loops={item.loops}
               isDefault={item.isDefault}
+              sheets={item.sheets}
               selected={item.animName === selectedName}
               onSelect={() => onSelect(item)}
             />

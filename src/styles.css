@@ -1287,10 +1287,26 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Truncated list of spritesheets this anim pulls from — full list in title */
+.anim-card-sheets {
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.75;
+}
+
 .anim-card .default-badge {
   margin-left: auto;
   font-size: 9px;
   padding: 0 4px;
+}
+
+.player-banner-sheets {
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
 }
 
 /* Sheets panel: docked right in wide mode, stacked in compact */

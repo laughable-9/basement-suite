@@ -9,6 +9,7 @@ import { normalizeTime } from "../../lib/anm2/timeline";
 import type { Anm2, Anm2Animation } from "../../lib/anm2/types";
 import { readText } from "../../lib/fsx/fs";
 import { headAnimFor } from "../../lib/anm2/compose";
+import { sheetNamesUsedByAnim } from "../../lib/anm2/sheetsUsed";
 import { loadAnm2Sheets, subscribeSheet } from "../../lib/sheets/store";
 import { useAppStore } from "../../app/store";
 import { OnionIcon, PauseIcon, PencilIcon, PlayIcon } from "../../app/icons";
@@ -418,10 +419,12 @@ export function Player({
       frameNum: a.frameNum,
       loops: a.loop,
       isDefault: a.name === loaded.anm2.defaultAnimation,
+      sheets: sheetNamesUsedByAnim(loaded.anm2, a),
     }));
     if (!loaded.costume || !costumeBaseScene) return playerItems;
     const playerNames = new Set(loaded.anm2.animations.map((a) => a.name));
-    const costumeItems: AnimItem[] = loaded.costume.anm2.animations
+    const costumeAnm2 = loaded.costume.anm2;
+    const costumeItems: AnimItem[] = costumeAnm2.animations
       .filter((a) => !playerNames.has(a.name) && a.frameNum > 0)
       .map((a) => ({
         baseScene: costumeBaseScene,
@@ -429,6 +432,7 @@ export function Player({
         frameNum: a.frameNum,
         loops: a.loop,
         isDefault: false,
+        sheets: sheetNamesUsedByAnim(costumeAnm2, a),
       }));
     return [...playerItems, ...costumeItems];
   }, [loaded, baseScene, costumeBaseScene]);
@@ -597,6 +601,12 @@ export function Player({
             ? `${anim.frameNum} frame${anim.frameNum === 1 ? "" : "s"}${anim.loop ? " · loops" : ""}`
             : ""}
         </div>
+        {anim && renderAnm2 && (
+          <div className="player-banner-sheets" title="Spritesheets this animation pulls from">
+            Sheets:{" "}
+            {sheetNamesUsedByAnim(renderAnm2, anim).join(", ") || "—"}
+          </div>
+        )}
         {transport}
       </div>
     </div>

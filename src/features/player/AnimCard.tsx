@@ -13,6 +13,7 @@ interface Props {
   frameNum: number;
   loops: boolean;
   isDefault: boolean;
+  sheets: string[];
   selected: boolean;
   onSelect: () => void;
 }
@@ -23,6 +24,7 @@ export function AnimCard({
   frameNum,
   loops,
   isDefault,
+  sheets,
   selected,
   onSelect,
 }: Props) {
@@ -62,11 +64,14 @@ export function AnimCard({
     };
   }, [baseScene, animName]);
 
+  const sheetsLabel = sheets.join(", ");
   return (
     <button
       className={`anim-card${selected ? " selected" : ""}`}
       onClick={onSelect}
-      title={animName}
+      title={
+        sheets.length > 0 ? `${animName}\nSheets: ${sheetsLabel}` : animName
+      }
     >
       <span className="anim-card-thumb checkerboard">
         <canvas ref={canvasRef} className="anim-card-canvas" />
@@ -79,6 +84,11 @@ export function AnimCard({
         {frameNum} Frame{frameNum === 1 ? "" : "s"}
         {loops ? " · loops" : ""}
       </span>
+      {sheets.length > 0 && (
+        <span className="anim-card-sheets" title={sheetsLabel}>
+          {sheetsLabel}
+        </span>
+      )}
     </button>
   );
 }
