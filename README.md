@@ -66,13 +66,12 @@ Repentance ships with an extractor that unpacks the game's `.a` archives into a 
 
 ### Step 3a — Install the prebuilt release *(recommended for non-developers)*
 
-The fastest way to use Basement Suite is to grab a packaged build from the GitHub [Releases page](https://github.com/laughable-9/basement-suite/releases) once one has been published. Each release attaches:
+The fastest way to use Basement Suite is to grab a packaged build from the GitHub [Releases page](https://github.com/laughable-9/basement-suite/releases). Each release currently attaches **Windows installers only** (macOS and Linux builds aren't published yet — see *Build from source* below if you're on another platform):
 
-- **Windows:** `Basement.Suite_<version>_x64_en-US.msi` (standard installer) and `Basement.Suite_<version>_x64-setup.exe` (NSIS installer)
-- **macOS:** `Basement.Suite_<version>_x64.dmg` (Intel) and `_aarch64.dmg` (Apple Silicon)
-- **Linux:** `basement-suite_<version>_amd64.AppImage` and a `.deb`
+- `Basement.Suite_<version>_x64_en-US.msi` (standard installer)
+- `Basement.Suite_<version>_x64-setup.exe` (NSIS installer)
 
-Run the installer; on Windows you may need to click *More info → Run anyway* the first time because the installer is currently unsigned.
+Run either; on Windows you may need to click *More info → Run anyway* the first time because the installer is currently unsigned.
 
 After it launches, jump to **Step 4 (configure paths)** below. If no release has been published yet, follow **Step 3b** to build from source.
 
