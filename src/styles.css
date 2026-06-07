@@ -1269,8 +1269,8 @@ body {
 }
 
 .anim-card-thumb {
-  flex: 1;
-  min-height: 0;
+  width: 100%;
+  aspect-ratio: 1;
   border-radius: 3px;
   overflow: hidden;
   display: block;
@@ -1342,9 +1342,28 @@ body {
 .sheet-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 8px 3px 14px;
-  min-height: 30px;
+  gap: 10px;
+  padding: 5px 8px 5px 14px;
+  min-height: 44px;
+}
+
+.sheet-thumb {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.sheet-thumb canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.sheet-thumb-blank {
+  background: var(--bg);
 }
 
 .sheet-row:hover {

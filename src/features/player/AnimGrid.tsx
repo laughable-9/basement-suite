@@ -7,7 +7,8 @@ import { AnimCard } from "./AnimCard";
 import type { ThumbScene } from "../home/renderThumb";
 
 const CARD_W = 132;
-const CARD_H = 148;
+// Tall enough that thumb aspect-ratio:1 + name + meta fit without stretching.
+const CARD_H = 172;
 const OVERSCAN_ROWS = 2;
 
 interface Props {

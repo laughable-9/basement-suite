@@ -401,34 +401,38 @@ export function Player({
     id: number,
     name: string,
     fullPath: string | undefined,
-    ok: boolean,
+    source: HTMLCanvasElement | null | undefined,
     anm2Path: string,
-  ) => (
-    <div className="sheet-row" key={`${anm2Path}#${id}`}>
-      <span
-        className={`sheet-row-name${ok ? "" : " sheet-row-missing"}`}
-        title={fullPath ?? name}
-      >
-        {name}
-      </span>
-      {ok && tabId !== undefined && fullPath && (
-        <button
-          className="rail-btn sheet-edit-btn"
-          title={`Edit ${name}`}
-          onClick={() =>
-            setTabEditing(tabId, {
-              sheetPath: fullPath,
-              anm2Path,
-              sheetId: id,
-            })
-          }
+  ) => {
+    const ok = !!source;
+    return (
+      <div className="sheet-row" key={`${anm2Path}#${id}`}>
+        <SheetThumb source={source} path={fullPath} />
+        <span
+          className={`sheet-row-name${ok ? "" : " sheet-row-missing"}`}
+          title={fullPath ?? name}
         >
-          <PencilIcon />
-        </button>
-      )}
-      {!ok && <span className="sheet-missing-badge">missing</span>}
-    </div>
-  );
+          {name}
+        </span>
+        {ok && tabId !== undefined && fullPath && (
+          <button
+            className="rail-btn sheet-edit-btn"
+            title={`Edit ${name}`}
+            onClick={() =>
+              setTabEditing(tabId, {
+                sheetPath: fullPath,
+                anm2Path,
+                sheetId: id,
+              })
+            }
+          >
+            <PencilIcon />
+          </button>
+        )}
+        {!ok && <span className="sheet-missing-badge">missing</span>}
+      </div>
+    );
+  };
 
   const sheetsPanel = (
     <aside className="player-sheets">
@@ -436,8 +440,14 @@ export function Player({
       <div className="panel-body">
         {anm2.content.spritesheets.map((s) => {
           const resolved = loaded.sheetPaths.get(s.id);
-          const ok = !!loaded.sheets.get(s.id);
-          return sheetRow(s.id, baseName(resolved ?? s.rawPath), resolved, ok, path);
+          const source = loaded.sheets.get(s.id);
+          return sheetRow(
+            s.id,
+            baseName(resolved ?? s.rawPath),
+            resolved,
+            source,
+            path,
+          );
         })}
         {loaded.costume && (
           <>
@@ -446,12 +456,12 @@ export function Player({
             </div>
             {loaded.costume.anm2.content.spritesheets.map((s) => {
               const resolved = loaded.costume!.byId.get(s.id);
-              const ok = !!loaded.costume!.sheets.get(s.id);
+              const source = loaded.costume!.sheets.get(s.id);
               return sheetRow(
                 s.id,
                 baseName(resolved ?? s.rawPath),
                 resolved,
-                ok,
+                source,
                 loaded.costume!.path,
               );
             })}
@@ -569,5 +579,49 @@ export function Player({
       </div>
       {sheetsPanel}
     </div>
+  );
+}
+
+/**
+ * Small inline thumbnail of a spritesheet PNG (decoded canvas already in
+ * memory via SheetDoc). Live-link aware: edits redraw the thumb.
+ */
+function SheetThumb({
+  source,
+  path,
+}: {
+  source: HTMLCanvasElement | null | undefined;
+  path: string | undefined;
+}) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [rev, setRev] = useState(0);
+
+  useEffect(() => {
+    if (!path) return;
+    return subscribeSheet(path, () => setRev((r) => r + 1));
+  }, [path]);
+
+  useEffect(() => {
+    const dst = ref.current;
+    if (!dst || !source) return;
+    const SIZE = 36;
+    const dpr = window.devicePixelRatio || 1;
+    dst.width = SIZE * dpr;
+    dst.height = SIZE * dpr;
+    const ctx = dst.getContext("2d")!;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    const scale = Math.min(SIZE / source.width, SIZE / source.height);
+    const w = source.width * scale;
+    const h = source.height * scale;
+    ctx.drawImage(source, (SIZE - w) / 2, (SIZE - h) / 2, w, h);
+  }, [source, rev]);
+
+  if (!source) return <span className="sheet-thumb sheet-thumb-blank" />;
+  return (
+    <span className="sheet-thumb checkerboard">
+      <canvas ref={ref} />
+    </span>
   );
 }
