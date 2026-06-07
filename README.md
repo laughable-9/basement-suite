@@ -49,171 +49,49 @@ This app reads only data the game's own resource extractor produces locally; it 
 
 ### Step 1 — Own *The Binding of Isaac: Repentance* on Steam
 
-Repentance or Repentance+ DLC is recommended for the full asset tree. Basement Suite browses *your* installed game; without it, there is nothing to load.
+Repentance / Repentance+ DLC is recommended for the full asset tree. Basement Suite browses *your* installed game; without it, there is nothing to load.
 
 ### Step 2 — Extract the game's resources
 
-Repentance ships with an extractor that unpacks the game's `.a` archives into a real folder structure you (and Basement Suite) can read.
+Repentance keeps its art packed inside `.a` archive files that no normal program can read. The game ships with an official extractor that unpacks everything into a real folder. **Run it once.**
 
-**Windows:**
 1. Open Steam → right-click *The Binding of Isaac: Rebirth* → **Manage → Browse local files**.
 2. Open `tools\ResourceExtractor\` inside that folder.
-3. **Right-click `ResourceExtractor.exe` → Run as administrator** (it writes back into the game directory).
-4. Click *Extract resources* and wait — first run takes a couple of minutes.
-5. When it's done you should see a new `<game folder>\extracted_resources\resources\` directory with thousands of PNGs and `.anm2` files under `gfx/`. That's the folder Basement Suite reads.
+3. **Right-click `ResourceExtractor.exe` → Run as administrator** *(important — it writes back into the game directory and will silently do nothing otherwise).*
+4. Click *Extract resources*. Takes a couple of minutes the first time.
+5. When it finishes you'll have a new folder: `<game folder>\extracted_resources\resources\` with thousands of PNGs and `.anm2` files under `gfx\`. That's what Basement Suite reads.
 
-**macOS / Linux:** Steam's *Properties → Installed Files → Browse* takes you to the game folder. The extractor is in the same `tools/ResourceExtractor/` directory and behaves the same way.
+### Step 3 — Install Basement Suite
 
-### Step 3a — Install the prebuilt release *(recommended for non-developers)*
+Download the latest installer from the **[Releases page](https://github.com/laughable-9/basement-suite/releases)** and run it. Two installers are attached to every release — pick whichever you prefer:
 
-The fastest way to use Basement Suite is to grab a packaged build from the GitHub [Releases page](https://github.com/laughable-9/basement-suite/releases). Each release currently attaches **Windows installers only** (macOS and Linux builds aren't published yet — see *Build from source* below if you're on another platform):
+- `Basement.Suite_<version>_x64-setup.exe` — NSIS installer (smaller, easier to uninstall)
+- `Basement.Suite_<version>_x64_en-US.msi` — MSI installer (good for enterprise / managed Windows)
 
-- `Basement.Suite_<version>_x64_en-US.msi` (standard installer)
-- `Basement.Suite_<version>_x64-setup.exe` (NSIS installer)
+The installer is **unsigned**, so Windows SmartScreen will warn *"Windows protected your PC"* on first run. Click **More info → Run anyway** to proceed.
 
-Run either; on Windows you may need to click *More info → Run anyway* the first time because the installer is currently unsigned.
+> macOS / Linux installers aren't published yet — see *Building from source* at the bottom of this README if you're on a non-Windows platform.
 
-After it launches, jump to **Step 4 (configure paths)** below. If no release has been published yet, follow **Step 3b** to build from source.
+### Step 4 — Point Basement Suite at your folders
 
-### Step 3b — Build from source *(developers)*
+Launch *Basement Suite* from the Start menu. The first time it opens you'll see a setup form with three folder fields. Click **Browse** next to each and pick the right folder:
 
-You need three things installed:
+| Field | What to pick |
+| --- | --- |
+| Isaac install folder | The folder Steam opened in Step 2 (the one with `isaac-ng.exe`). |
+| Mods folder | The `mods` subfolder inside the Isaac folder. |
+| Extracted resources folder | The `resources` folder you got in Step 2 (`<Isaac folder>\extracted_resources\resources`). |
 
-1. **Node.js 20 or newer** — `node --version` should report `v20.x` or higher. Get it from [nodejs.org](https://nodejs.org/) or `nvm install 20`.
-2. **Rust** via [rustup](https://rustup.rs/) — `rustc --version` should print a stable version (1.75+).
-3. **Platform native build tools** so the Rust crate can link:
-   - **Windows:** [Visual Studio Build Tools](https://visualstudio.microsoft.com/downloads/?q=build+tools) → tick **"Desktop development with C++"**. The standalone Build Tools installer (no full VS) is enough.
-   - **macOS:** `xcode-select --install` (the Command Line Tools — full Xcode not required).
-   - **Linux (Debian / Ubuntu):** `sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`
-   - Other distros: the Tauri docs at [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/) list the equivalents.
+Hit **Save and continue**. Your choices are stored in `%APPDATA%\dev.kyle.basement-suite\bs.config.json` so you only do this once — change them later via the gear icon at the top-right.
 
-Then clone and install JS deps:
-```bash
-git clone https://github.com/laughable-9/basement-suite.git
-cd basement-suite
-npm install
-```
-
-### Step 4 — Create `bs.config.json`
-
-Basement Suite reads three paths from a `bs.config.json` file in the repo root (or, for a packaged install, in the app's working directory). The file is git-ignored on purpose — these paths are machine-local. **Use forward slashes on every platform**, including Windows.
-
-```json
-{
-  "isaacPath": "C:/Program Files (x86)/Steam/steamapps/common/The Binding of Isaac Rebirth",
-  "modsPath": "C:/Program Files (x86)/Steam/steamapps/common/The Binding of Isaac Rebirth/mods",
-  "extractedResourcesPath": "C:/Program Files (x86)/Steam/steamapps/common/The Binding of Isaac Rebirth/extracted_resources/resources"
-}
-```
-
-**Finding your paths:**
-
-| Key | What it points at | Default location |
-| --- | --- | --- |
-| `isaacPath` | The game install folder (the one with `isaac-ng.exe`) | Steam → *Manage → Browse local files* |
-| `modsPath` | The `mods` folder Isaac loads from at launch | `<isaacPath>/mods` on every platform |
-| `extractedResourcesPath` | The `resources/` folder **inside** `extracted_resources/` (the one with `gfx/`, `sfx/`, etc.) | `<isaacPath>/extracted_resources/resources` after running the extractor |
-
-Examples for other platforms:
-
-```json
-// macOS
-{
-  "isaacPath":               "/Users/<you>/Library/Application Support/Steam/steamapps/common/The Binding of Isaac Rebirth",
-  "modsPath":                "/Users/<you>/Library/Application Support/Steam/steamapps/common/The Binding of Isaac Rebirth/mods",
-  "extractedResourcesPath":  "/Users/<you>/Library/Application Support/Steam/steamapps/common/The Binding of Isaac Rebirth/extracted_resources/resources"
-}
-```
-
-```json
-// Linux
-{
-  "isaacPath":               "/home/<you>/.steam/steam/steamapps/common/The Binding of Isaac Rebirth",
-  "modsPath":                "/home/<you>/.steam/steam/steamapps/common/The Binding of Isaac Rebirth/mods",
-  "extractedResourcesPath":  "/home/<you>/.steam/steam/steamapps/common/The Binding of Isaac Rebirth/extracted_resources/resources"
-}
-```
-
-If any of these paths is wrong the app will start but show empty catalogs — open **Settings** (gear icon, top-right) to verify each one is reachable.
-
-### Step 5 — Run
-
-**From a packaged install:** just launch *Basement Suite* from the Start menu / Applications folder / `.AppImage`.
-
-**From source, dev mode (desktop window with HMR):**
-```bash
-npm run tauri dev
-```
-The first Rust compile takes several minutes (downloads and compiles ~400 crates). Subsequent runs are seconds. The window opens automatically.
-
-**From source, packaged installer:**
-```bash
-npm run tauri build
-```
-The installer / app bundle lands in `src-tauri/target/release/bundle/` (e.g. `bundle/msi/Basement.Suite_0.1.0_x64_en-US.msi` on Windows).
-
-### Other useful commands
-
-```bash
-npm test            # vitest suite (catalog, parser, history, etc.) — 93 tests
-npm run build       # tsc type-check + Vite bundle (no Rust)
-npm run dev         # Vite only — UI loads in a browser but fs calls fail
-```
+That's it. The Home tab populates as the catalog finishes building (~5 seconds on first launch).
 
 ### Troubleshooting
 
-- **"No catalog loaded" / empty Home tab** → `extractedResourcesPath` is wrong, or the extractor hasn't been run. Open Settings, fix the path, *Reload catalog*.
-- **"failed to read bs.config.json"** → check the file is in the repo root (source) or beside the executable (packaged), valid JSON, forward slashes.
-- **`npm install` fails with `node-gyp` / `MSBuild not found` on Windows** → the C++ workload of Visual Studio Build Tools isn't installed.
-- **`tauri dev` hangs at "compiling tao"** → not hung; the first build is slow. Let it run for 5–10 minutes the first time.
-- **App launches but characters render as blank silhouettes** → the catalog is loading but spritesheet PNGs aren't being found. Verify `extractedResourcesPath` points at the folder containing `gfx/`, not at the parent.
-
-## Releases
-
-Releases are published automatically by GitHub Actions when a version tag is pushed. The workflow at `.github/workflows/release.yml` runs `npm run tauri build` on Windows, macOS, and Linux runners and attaches the installers to a draft release on the [Releases page](https://github.com/laughable-9/basement-suite/releases).
-
-To cut a new release:
-
-```bash
-# 1. Bump the version in both files (must match)
-#    - package.json          → "version": "0.2.0"
-#    - src-tauri/tauri.conf.json → "version": "0.2.0"
-# 2. Commit + push the bump
-git add package.json src-tauri/tauri.conf.json
-git commit -m "chore(release): v0.2.0"
-git push
-
-# 3. Tag the commit and push the tag
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-That tag push fires the workflow. ~10 minutes later a **draft release** appears on GitHub with the MSI / NSIS / DMG / AppImage / .deb attached. Edit the release notes, hit **Publish**, and users can download.
-
-### How version numbers work — *semver in one paragraph*
-
-Basement Suite follows [Semantic Versioning](https://semver.org/): **MAJOR.MINOR.PATCH** (`v0.2.5`).
-
-- **PATCH** (`v0.2.0 → v0.2.1`) — bug fixes only, no new features. Safe to install blindly.
-- **MINOR** (`v0.2.5 → v0.3.0`) — new features that don't break anything existing.
-- **MAJOR** (`v0.x → v1.0`) — breaking changes (config file format, mod layout, etc.). The `0.x` prefix is the pre-1.0 era — minor versions may still break things. Once it hits `v1.0.0` you're promising stability.
-
-### How software engineers actually decide when to release
-
-You don't tag every commit. The two common cadences:
-
-- **By time** — every 1–2 weeks if there's anything worth shipping, otherwise skip. Predictable and simple.
-- **By milestone** — release when a meaningful chunk of work lands (a new tab, a major feature, a batch of fixes that solve a real user pain). This is what most small projects do.
-
-Either way, the rules of thumb:
-
-1. **Never release from a broken `main`.** CI must be green; `npm test` must pass; the app must launch and the golden-path features must work.
-2. **Batch fixes.** If you fix three small bugs in a day, release once at the end of the day as `v0.2.1`, not three times.
-3. **Use pre-releases for risky stuff.** Tag `v0.3.0-beta.1` for in-progress features; GitHub flags it "Pre-release" so users know it's experimental.
-4. **Keep a `CHANGELOG.md`** (or write good release notes in the GitHub release UI). "v0.2.0 — added the lasso tool, fixed the layer reorder undo bug" is more useful to your users than just a tag.
-5. **Don't break old configs.** If you change the `bs.config.json` schema, either auto-migrate it or bump the MAJOR version.
-
-For Basement Suite right now (early `0.1.x`), a sensible cadence is: ship a `0.1.x` patch whenever you fix something users would notice, bump to `0.2.0` when a meaningful feature group lands (e.g. shape tools or layer groups), and target `v1.0.0` only when you'd be embarrassed to break the config format.
+- **"Windows protected your PC" SmartScreen warning** — expected; the installer isn't signed. Click *More info → Run anyway*.
+- **Empty Home tab** — the `Extracted resources folder` is wrong, or the extractor was never run. Open Settings (gear icon), point at `<Isaac folder>\extracted_resources\resources`, hit Save.
+- **Setup form shows "does not exist on disk"** — the path you typed isn't a real folder. Use the Browse button to pick it instead of typing.
+- **Characters render as blank silhouettes** — the catalog loaded but spritesheet PNGs can't be found. Confirm `extracted_resources/resources` contains a `gfx/` folder; if not, re-run the resource extractor as administrator.
 
 ## Tech
 
@@ -228,6 +106,21 @@ This repo contains **no game assets**. Spritesheets and `.anm2` files are copyri
 If Basement Suite has saved you time on a mod and you'd like to throw a tip in the jar:
 
 [![Support on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/laughable)
+
+## Building from source
+
+For non-Windows users, or anyone who wants to contribute. You'll need [Node.js 20+](https://nodejs.org/), [Rust](https://rustup.rs/), and your platform's native build tools (on Windows: Visual Studio Build Tools with the C++ workload; on macOS: `xcode-select --install`; on Debian/Ubuntu: `sudo apt install libwebkit2gtk-4.1-dev build-essential libxdo-dev libssl-dev librsvg2-dev`).
+
+```bash
+git clone https://github.com/laughable-9/basement-suite.git
+cd basement-suite
+npm install
+npm run tauri dev        # desktop window with hot-reload
+```
+
+The first Rust compile takes 5–10 minutes (downloads ~400 crates); subsequent runs are seconds. `npm run tauri build` produces a packaged installer in `src-tauri/target/release/bundle/`. `npm test` runs the 93-test vitest suite.
+
+In dev mode the app reads `bs.config.json` from the repo root as a fallback, so you don't have to migrate your config to AppData while iterating.
 
 ## License
 

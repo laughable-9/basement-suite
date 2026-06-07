@@ -488,6 +488,264 @@ body {
   margin: 12px 0 0;
 }
 
+/* Wider so the path inputs aren't cramped. */
+.settings-popover {
+  width: 460px;
+}
+
+.settings-popover .settings-field-row input {
+  font-size: 12px;
+}
+
+/* First-run onboarding wizard. */
+.setup-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: grid;
+  place-items: center;
+  z-index: 200;
+  padding: 24px;
+  overflow: auto;
+}
+
+.setup-card {
+  width: 580px;
+  max-width: 100%;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 22px 28px 20px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 380px;
+}
+
+.setup-progress {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.setup-progress-dot {
+  width: 28px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.setup-progress-dot.done {
+  background: var(--accent);
+  opacity: 0.55;
+}
+
+.setup-progress-dot.active {
+  background: var(--accent);
+}
+
+.setup-title {
+  margin: 4px 0 2px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.setup-lede {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.setup-lede code,
+.setup-callout code,
+.setup-note code,
+.setup-review code {
+  background: var(--bg);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
+.setup-list {
+  margin: 0 0 0 18px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.setup-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.setup-callout {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.setup-callout b {
+  color: var(--text);
+}
+
+.setup-callout ol {
+  margin: 6px 0 0 18px;
+  padding: 0;
+  color: var(--text-dim);
+}
+
+.setup-callout li {
+  margin: 3px 0;
+}
+
+.setup-path-row {
+  display: flex;
+  gap: 6px;
+}
+
+.setup-path-row input {
+  flex: 1;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 6px 8px;
+  font: 12.5px ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.setup-path-row input:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.setup-browse-btn {
+  min-width: 88px;
+}
+
+.setup-review {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 6px 14px;
+  font-size: 12.5px;
+}
+
+.setup-review dt {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.setup-review dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+}
+
+.setup-config-path {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+
+.setup-problems {
+  margin: 0;
+  padding: 10px 14px 10px 28px;
+  border: 1px solid #6e3a2c;
+  background: #2a1812;
+  color: #e6a89c;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.setup-problems li {
+  margin: 2px 0;
+}
+
+.setup-actions {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.setup-actions-spacer {
+  flex: 1;
+}
+
+.settings-field {
+  display: block;
+  margin-bottom: 12px;
+}
+
+.settings-field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.settings-field-row {
+  display: flex;
+  gap: 6px;
+}
+
+.settings-field-row input {
+  flex: 1;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 5px 8px;
+  font: 12px ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.settings-field-row input:focus {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.settings-pick-btn {
+  min-width: 70px;
+}
+
+.settings-problems-inline {
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  border: 1px solid #6e3a2c;
+  background: #2a1812;
+  color: #e6a89c;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.settings-config-path {
+  font-size: 11px;
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+  overflow-wrap: anywhere;
+}
+
 .skeleton-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
