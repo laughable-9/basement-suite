@@ -8,8 +8,6 @@ import {
   relUnderGfx,
 } from "./modExport";
 
-const LAST_MOD_KEY = "bs:lastModName";
-
 interface Props {
   doc: SheetDoc;
   onClose: () => void;
@@ -18,8 +16,10 @@ interface Props {
 
 export function SaveToModDialog({ doc, onClose, onSaved }: Props) {
   const paths = useAppStore((s) => s.paths);
+  const activeMod = useAppStore((s) => s.activeMod);
+  const setActiveMod = useAppStore((s) => s.setActiveMod);
   const [modName, setModName] = useState(
-    () => localStorage.getItem(LAST_MOD_KEY) ?? "my sprite mod",
+    () => activeMod ?? "my sprite mod",
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +50,7 @@ export function SaveToModDialog({ doc, onClose, onSaved }: Props) {
         paths.modsPath,
         modName.trim(),
       );
-      localStorage.setItem(LAST_MOD_KEY, modName.trim());
+      setActiveMod(modName.trim());
       onSaved(result.pngPath);
     } catch (e) {
       setError(String(e));
