@@ -3,6 +3,7 @@ import { exists } from "@tauri-apps/plugin-fs";
 import { loadConfig, type ConfigState } from "./lib/fsx/config";
 import { loadCatalog } from "./lib/catalog/load";
 import { AppShell } from "./features/shell/AppShell";
+import { ErrorBoundary } from "./app/ErrorBoundary";
 import {
   useAppStore,
   type HomeLocation,
@@ -136,9 +137,9 @@ export default function App() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <Toasts />
       <AppShell />
-    </>
+    </ErrorBoundary>
   );
 }
