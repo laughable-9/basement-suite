@@ -1024,15 +1024,24 @@ body {
 }
 
 .player-stage-col {
-  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
 }
 
+/* Normal mode: the preview is a capped reference pane on the left —
+   the animation/sheet panels are the focus and take the rest. */
+.player-wide .player-stage-col {
+  flex: 0 1 44%;
+  max-width: 620px;
+  min-width: 320px;
+  border-right: 1px solid var(--border);
+}
+
+/* Live-preview (split) mode: watching the edit is the point — preview big. */
 .player-stack .player-stage-col {
-  flex: 1.2;
+  flex: 1.6;
 }
 
 .player-header {
@@ -1173,10 +1182,11 @@ body {
   background: var(--bg-raised);
 }
 
+/* Normal mode: panels side by side filling the main area */
 .player-wide .player-panels {
-  width: 320px;
-  flex-shrink: 0;
-  border-left: 1px solid var(--border);
+  flex: 1;
+  min-width: 0;
+  flex-direction: row;
 }
 
 .player-stack .player-panels {
@@ -1192,14 +1202,24 @@ body {
 
 .panel-anims {
   flex: 1;
+  min-width: 0;
 }
 
-.panel-sheets {
+.player-wide .panel-anims {
+  border-right: 1px solid var(--border);
+}
+
+.player-wide .panel-sheets {
+  width: 360px;
+  flex-shrink: 0;
+}
+
+.player-stack .panel-sheets {
   flex-shrink: 0;
   max-height: 42%;
 }
 
-.panel + .panel .panel-header {
+.player-stack .panel + .panel .panel-header {
   border-top: 1px solid var(--border);
 }
 
