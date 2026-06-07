@@ -18,14 +18,21 @@ export interface ModSummary {
   totalBytes: number;
 }
 
+const EMPTY_META: ModMetadata = {
+  name: null,
+  description: null,
+  version: null,
+  directory: null,
+  id: null,
+};
+
 async function readMetadata(folder: string): Promise<ModMetadata> {
   const file = `${folder}/metadata.xml`;
   try {
-    if (!(await exists(file)))
-      return { name: null, description: null, version: null, directory: null };
+    if (!(await exists(file))) return EMPTY_META;
     return parseMetadataXml(await readTextFile(file));
   } catch {
-    return { name: null, description: null, version: null, directory: null };
+    return EMPTY_META;
   }
 }
 

@@ -8,6 +8,13 @@ export interface ModMetadata {
   description: string | null;
   version: string | null;
   directory: string | null;
+  /** Workshop ID — populated by Steam when subscribing. Numeric string. */
+  id: string | null;
+}
+
+/** Steam Workshop mods have a numeric <id> stamped by the Workshop uploader. */
+export function isWorkshopMod(meta: ModMetadata): boolean {
+  return meta.id !== null && /^\d{4,}$/.test(meta.id);
 }
 
 const xml = new XMLParser({
@@ -34,6 +41,7 @@ export function parseMetadataXml(text: string): ModMetadata {
     description: null,
     version: null,
     directory: null,
+    id: null,
   };
   try {
     const doc = xml.parse(text) as Raw;
@@ -47,6 +55,7 @@ export function parseMetadataXml(text: string): ModMetadata {
       description: str(root.description) ?? str(root.Description),
       version: str(root.version) ?? str(root.Version),
       directory: str(root.directory) ?? str(root.Directory),
+      id: str(root.id) ?? str(root.Id) ?? str(root.ID),
     };
   } catch {
     return empty;
