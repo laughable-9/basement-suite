@@ -30,6 +30,7 @@ function AnimThumb({ tab }: { tab: WorkTab }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<ThumbScene | null>(null);
   const rafRef = useRef(0);
+  const activeMod = useAppStore((s) => s.activeMod);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -66,7 +67,7 @@ function AnimThumb({ tab }: { tab: WorkTab }) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
     };
-  }, [tab.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab.id, activeMod]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function startPlayback() {
     const canvas = canvasRef.current;

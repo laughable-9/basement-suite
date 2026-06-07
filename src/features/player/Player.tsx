@@ -143,6 +143,9 @@ export function Player({
   const setTabEditing = useAppStore((s) => s.setTabEditing);
   const playerJump = useAppStore((s) => s.playerJump);
   const requestEditorJump = useAppStore((s) => s.requestEditorJump);
+  // Re-resolve sheets when the user switches active mods (overlay path
+  // changes invalidate the loaded canvases). Read but not otherwise used.
+  const activeMod = useAppStore((s) => s.activeMod);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [animName, setAnimName] = useState("");
@@ -206,7 +209,7 @@ export function Player({
     return () => {
       cancelled = true;
     };
-  }, [path, skinPath, costumePath]);
+  }, [path, skinPath, costumePath, activeMod]);
 
   // Resolve the active animation by searching the player anm2 first, then
   // the costume anm2 (which carries Azazel's HeadDownShoot/Charge etc.).
