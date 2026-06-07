@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "../../app/store";
 import { listMods, type ModSummary } from "../../lib/mods/listMods";
 import type { ModFile } from "../../lib/mods/fileTree";
+import { DiffViewer } from "./DiffViewer";
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -98,6 +99,7 @@ export function ModsPanel() {
               isActive={activeMod === current.folderName}
               onSetActive={() => setActiveMod(current.folderName)}
               openFile={openFile}
+              gfxRoot={paths.gfxRoot}
             />
           </section>
         </>
@@ -189,11 +191,13 @@ function ModDetail({
   isActive,
   onSetActive,
   openFile,
+  gfxRoot,
 }: {
   mod: ModSummary;
   isActive: boolean;
   onSetActive: () => void;
   openFile: ModFile | null;
+  gfxRoot: string;
 }) {
   return (
     <div className="mod-detail">
@@ -222,9 +226,7 @@ function ModDetail({
         )}
       </header>
       {openFile ? (
-        <div className="detail-empty">
-          Diff viewer for <code>{openFile.rel}</code> is coming next (M6.6).
-        </div>
+        <DiffViewer file={openFile} gfxRoot={gfxRoot} />
       ) : (
         <div className="detail-empty">
           Pick a file on the left to compare it with vanilla.
