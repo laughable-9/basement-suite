@@ -20,6 +20,7 @@ import {
 } from "./floating";
 import { extractPalette } from "./palette";
 import { SaveToModDialog } from "../export/SaveToModDialog";
+import { exportToMod } from "../export/modExport";
 import { EditorCanvas, type Tool } from "./EditorCanvas";
 import { findSharedSheetInfo } from "./sharedSheet";
 import { rectAtFrame } from "./rectAtFrame";
@@ -103,6 +104,8 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
   const requestPlayerJump = useAppStore((s) => s.requestPlayerJump);
   const addToast = useAppStore((s) => s.addToast);
   const catalog = useAppStore((s) => s.catalog);
+  const storePaths = useAppStore((s) => s.paths);
+  const activeMod = useAppStore((s) => s.activeMod);
   const currentTitle = useAppStore(
     (s) => s.tabs.find((t) => t.id === tabId)?.title,
   );
@@ -245,6 +248,32 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
       return next.slice(0, MAX_RECENT);
     });
   }, []);
+
+  /**
+   * Ctrl+S behavior: if there's an active mod, write straight into it
+   * (Photoshop's "Save"). If there isn't, open the dialog so the user can
+   * name a new one (Photoshop's "Save As"). Ctrl+Shift+S always opens the
+   * dialog so the user can target a different mod even when one is active.
+   */
+  const triggerSave = useCallback(async () => {
+    if (!doc || !storePaths) return;
+    if (!activeMod) {
+      setSaveOpen(true);
+      return;
+    }
+    try {
+      const result = await exportToMod(
+        doc,
+        storePaths.gfxRoot,
+        storePaths.modsPath,
+        activeMod,
+      );
+      setSavedPath(result.pngPath);
+      addToast(`Saved → ${result.pngPath}`, "success");
+    } catch (e) {
+      addToast(`Save failed: ${e}`, "error");
+    }
+  }, [doc, storePaths, activeMod, addToast]);
 
   const onStrokeEnd = useCallback(() => {
     pushRecent(color);
@@ -466,7 +495,9 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
       }
       if (e.ctrlKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        setSaveOpen(true);
+        // Shift bypasses the active-mod shortcut so users can re-target.
+        if (e.shiftKey) setSaveOpen(true);
+        else void triggerSave();
       } else if (e.ctrlKey && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) redo(doc);
@@ -534,6 +565,7 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
     triggerTransform,
     triggerClear,
     triggerMergeDown,
+    triggerSave,
     color,
     bgColor,
   ]);
@@ -568,10 +600,14 @@ export function Editor({ target, tabId, active, onClose }: EditorProps) {
         </span>
         <button
           className="save-btn"
-          onClick={() => setSaveOpen(true)}
-          title="Write this sheet into a mod folder (Ctrl+S)"
+          onClick={() => void triggerSave()}
+          title={
+            activeMod
+              ? `Save to "${activeMod}" (Ctrl+S) · Ctrl+Shift+S to pick a different mod`
+              : "Write this sheet into a mod folder (Ctrl+S)"
+          }
         >
-          Save to mod
+          {activeMod ? `Save to ${activeMod}` : "Save to mod…"}
         </button>
         <button
           className="rail-btn"
