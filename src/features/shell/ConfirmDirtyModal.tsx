@@ -55,18 +55,18 @@ export function ConfirmDirtyModal({
           )}
         </ul>
         <div className="modal-actions">
-          <button className="player-btn modal-btn" onClick={onCancel}>
+          <button className="modal-btn" onClick={onCancel}>
             Cancel
           </button>
           <button
-            className="player-btn modal-btn"
+            className="modal-btn"
             onClick={onDiscard}
             title="Throw away unsaved changes"
           >
             {discardLabel}
           </button>
           <button
-            className="player-btn modal-btn primary"
+            className="modal-btn primary"
             disabled={!canSave}
             onClick={onSave}
             title={

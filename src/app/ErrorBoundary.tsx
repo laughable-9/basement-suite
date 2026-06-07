@@ -51,13 +51,13 @@ export class ErrorBoundary extends Component<Props, State> {
           </pre>
           <div className="modal-actions" style={{ marginTop: 16 }}>
             <button
-              className="player-btn modal-btn"
+              className="modal-btn"
               onClick={() => window.location.reload()}
             >
               Reload
             </button>
             <button
-              className="player-btn modal-btn primary"
+              className="modal-btn primary"
               onClick={this.reset}
             >
               Try again

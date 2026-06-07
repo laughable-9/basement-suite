@@ -1461,10 +1461,28 @@ body {
   margin-top: 16px;
 }
 
+/* Modal action buttons stand on their own — they used to compose with
+   .player-btn which gave them a 34×28 icon-square footprint and clipped
+   the labels. Self-contained now so source order can't break them. */
 .modal-btn {
-  width: auto;
-  padding: 4px 14px;
-  font-size: 12px;
+  font: inherit;
+  font-size: 13px;
+  min-width: 92px;
+  padding: 6px 18px;
+  background: var(--bg);
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.modal-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.modal-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .modal-btn.primary {
@@ -1473,16 +1491,18 @@ body {
   color: #fff;
 }
 
-.modal-btn.primary:disabled {
-  opacity: 0.5;
+.modal-btn.primary:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.12);
 }
 
 .modal-btn-danger {
   background: #8a3a2a;
   border-color: #8a3a2a;
+  color: #fff;
 }
 
-.modal-btn-danger:hover {
+.modal-btn-danger:hover:not(:disabled) {
   filter: brightness(1.15);
 }
 

@@ -96,11 +96,11 @@ export function SaveToModDialog({ doc, onClose, onSaved }: Props) {
             </p>
             {error && <p className="detail-error">{error}</p>}
             <div className="modal-actions">
-              <button className="player-btn modal-btn" onClick={onClose}>
+              <button className="modal-btn" onClick={onClose}>
                 Cancel
               </button>
               <button
-                className="player-btn modal-btn primary"
+                className="modal-btn primary"
                 disabled={!valid || busy}
                 onClick={save}
               >
