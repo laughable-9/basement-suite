@@ -3,7 +3,7 @@
 // reveals vanilla where the slider sweeps left.
 
 import { useEffect, useRef, useState } from "react";
-import { useAppStore } from "../../app/store";
+import { MagnifierIcon } from "../../app/icons";
 import type { ModFile } from "../../lib/mods/fileTree";
 import { decodePng } from "./decodePng";
 
@@ -23,9 +23,10 @@ interface Loaded {
 type Mode = "side" | "overlay";
 
 export function DiffViewer({ file, gfxRoot }: Props) {
-  const lastZoom = useAppStore((s) => s.lastEditorZoom);
   const [mode, setMode] = useState<Mode>("side");
-  const [zoom, setZoom] = useState<number | "fit">(() => lastZoom);
+  // Always start at Fit — the sprite is the focus, not the modded sheet's
+  // raw size. User can dial in a fixed zoom for pixel-level inspection.
+  const [zoom, setZoom] = useState<number | "fit">("fit");
   const [loaded, setLoaded] = useState<Loaded | null>(null);
 
   useEffect(() => {
@@ -64,8 +65,8 @@ export function DiffViewer({ file, gfxRoot }: Props) {
             Overlay
           </button>
         </div>
-        <label className="player-zoom">
-          zoom
+        <label className="zoom-control" title="Diff zoom">
+          <MagnifierIcon />
           <select
             className="transport-select"
             value={zoom === "fit" ? "fit" : String(zoom)}
