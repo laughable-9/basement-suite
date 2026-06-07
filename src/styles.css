@@ -1717,6 +1717,20 @@ body {
   padding: 3px 4px;
 }
 
+/* Zoom dropdown wrapper: magnifier icon prefix + select. Shared between
+   the player transport and the mod diff viewer. */
+.zoom-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+}
+
+.zoom-control svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* Film-strip view of every frame in the current animation. Horizontal
    scroll, capped height. Clicking a thumb seeks the player and (if the
    editor is open on a participating sheet) pans the editor to the rect. */

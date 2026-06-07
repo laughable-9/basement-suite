@@ -15,6 +15,7 @@ import { useAppStore } from "../../app/store";
 import {
   FilmStripIcon,
   LoopIcon,
+  MagnifierIcon,
   OnionIcon,
   PauseIcon,
   PencilIcon,
@@ -527,21 +528,23 @@ export function Player({
           : "–"}
       </span>
       <span className="transport-sep" />
-      <select
-        className="transport-select"
-        title="Preview zoom"
-        value={zoom === "fit" ? "fit" : String(zoom)}
-        onChange={(e) =>
-          setZoom(e.target.value === "fit" ? "fit" : Number(e.target.value))
-        }
-      >
-        <option value="fit">Fit</option>
-        {ZOOMS.map((z) => (
-          <option key={z} value={String(z)}>
-            {z}×
-          </option>
-        ))}
-      </select>
+      <label className="zoom-control" title="Preview zoom">
+        <MagnifierIcon />
+        <select
+          className="transport-select"
+          value={zoom === "fit" ? "fit" : String(zoom)}
+          onChange={(e) =>
+            setZoom(e.target.value === "fit" ? "fit" : Number(e.target.value))
+          }
+        >
+          <option value="fit">Fit</option>
+          {ZOOMS.map((z) => (
+            <option key={z} value={String(z)}>
+              {z}×
+            </option>
+          ))}
+        </select>
+      </label>
       <button
         className={`rail-btn${onion ? " active" : ""}`}
         title="Onion skin — ghost the previous/next frame"
