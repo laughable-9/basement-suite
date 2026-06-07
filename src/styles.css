@@ -837,6 +837,27 @@ body {
   flex-shrink: 0;
 }
 
+.dirty-list {
+  margin: 12px 0 0;
+  padding: 0 0 0 20px;
+  font-size: 12px;
+  color: var(--text-dim);
+  list-style: disc;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.dirty-list li {
+  margin: 2px 0;
+}
+
+.dirty-more {
+  list-style: none;
+  margin-left: -16px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
 .mods-firstrun {
   padding: 20px 18px;
   color: var(--text-dim);

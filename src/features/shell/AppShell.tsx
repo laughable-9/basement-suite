@@ -4,7 +4,9 @@ import {
   type RailCategory,
   type WorkTab,
 } from "../../app/store";
-import { peekSheetDoc, subscribeSheet } from "../../lib/sheets/store";
+import { peekSheetDoc, subscribeSheet, type SheetDoc } from "../../lib/sheets/store";
+import { listAllDirty, discardAllDirty } from "../../lib/sheets/dirty";
+import { ConfirmDirtyModal } from "./ConfirmDirtyModal";
 import { applyIsaacBranding } from "./isaacBranding";
 import {
   BoxIcon,
@@ -61,23 +63,61 @@ const RAIL: { id: RailCategory; icon: () => React.ReactNode; label: string }[] =
     { id: "files", icon: FolderIcon, label: "Files (raw tree)" },
   ];
 
+/** Sheets the user is likely to lose if this tab is the last thing keeping
+ *  them in scope (currently-open editor sheet + the tab's primary sheet). */
+function dirtyForTab(tab: WorkTab): SheetDoc[] {
+  const paths = new Set<string>();
+  if (tab.sheetPath) paths.add(tab.sheetPath);
+  if (tab.editing) paths.add(tab.editing.sheetPath);
+  const out: SheetDoc[] = [];
+  for (const p of paths) {
+    const doc = peekSheetDoc(p);
+    if (doc?.dirty) out.push(doc);
+  }
+  return out;
+}
+
 export function AppShell() {
   const tabs = useAppStore((s) => s.tabs);
   const activeTabId = useAppStore((s) => s.activeTabId);
   const setActiveTab = useAppStore((s) => s.setActiveTab);
   const closeTabRaw = useAppStore((s) => s.closeTab);
 
+  // Custom modal replaces native confirm() — matches our Photoshop styling
+  // and gives a third "Save to mod" option (when there's an active mod).
+  const [pendingClose, setPendingClose] = useState<WorkTab | null>(null);
+
   // Closing a tab with unsaved sheet edits asks first.
   const closeTab = useCallback(
     (tab: WorkTab) => {
-      const doc = tab.editing && peekSheetDoc(tab.editing.sheetPath);
-      if (doc?.dirty && !confirm(`"${tab.title}" has unsaved edits. Close anyway?`)) {
+      if (dirtyForTab(tab).length > 0) {
+        setPendingClose(tab);
         return;
       }
       closeTabRaw(tab.id);
     },
     [closeTabRaw],
   );
+  const setActiveMod = useAppStore((s) => s.setActiveMod);
+  const [pendingMod, setPendingMod] = useState<string | null>(null);
+  // Listen for mod-switch requests from ModsPanel via a custom event so
+  // ModsPanel doesn't need its own modal copy. Simpler than threading
+  // callbacks through the panel hierarchy.
+  useEffect(() => {
+    const onSwitchRequest = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (typeof detail !== "string") return;
+      if (listAllDirty().length === 0) {
+        setActiveMod(detail);
+      } else {
+        setPendingMod(detail);
+      }
+    };
+    window.addEventListener("bs:request-mod-switch", onSwitchRequest);
+    return () =>
+      window.removeEventListener("bs:request-mod-switch", onSwitchRequest);
+  }, [setActiveMod]);
+
   const home = useAppStore((s) => s.home);
   const setHome = useAppStore((s) => s.setHome);
   const query = useAppStore((s) => s.searchQuery);
@@ -243,6 +283,44 @@ export function AppShell() {
           mod: {activeMod ?? "—"}
         </span>
       </footer>
+      {pendingClose && (
+        <ConfirmDirtyModal
+          title={`Close "${pendingClose.title}"?`}
+          body={`This tab has unsaved sprite edits. Saving without an active mod isn't possible from here — open the editor and Ctrl+S first to pick a mod, or discard.`}
+          dirty={dirtyForTab(pendingClose)}
+          canSave={false}
+          saveLabel="Save to mod"
+          onSave={() => {}}
+          onDiscard={() => {
+            for (const d of dirtyForTab(pendingClose)) {
+              // Discard = clear the dirty flag, dropping in-memory edits.
+              // Re-decoded on next load.
+              d.dirty = false;
+            }
+            const id = pendingClose.id;
+            setPendingClose(null);
+            closeTabRaw(id);
+          }}
+          onCancel={() => setPendingClose(null)}
+        />
+      )}
+      {pendingMod && (
+        <ConfirmDirtyModal
+          title={`Switch to "${pendingMod}"?`}
+          body={`Switching the active mod throws away in-memory sprite edits because the canvas cache reloads from disk. Save them to the current active mod first, or discard.`}
+          dirty={listAllDirty()}
+          canSave={false}
+          saveLabel="Save to mod"
+          onSave={() => {}}
+          onDiscard={() => {
+            discardAllDirty();
+            const name = pendingMod;
+            setPendingMod(null);
+            setActiveMod(name);
+          }}
+          onCancel={() => setPendingMod(null)}
+        />
+      )}
     </div>
   );
 }

@@ -17,7 +17,13 @@ function fmtBytes(n: number): string {
 export function ModsPanel() {
   const paths = useAppStore((s) => s.paths);
   const activeMod = useAppStore((s) => s.activeMod);
-  const setActiveMod = useAppStore((s) => s.setActiveMod);
+  // Switch requests go through AppShell so the dirty-prompt modal is one
+  // shared component instead of two copies.
+  const requestSwitch = (name: string) => {
+    window.dispatchEvent(
+      new CustomEvent("bs:request-mod-switch", { detail: name }),
+    );
+  };
   const [mods, setMods] = useState<ModSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
@@ -97,7 +103,7 @@ export function ModsPanel() {
             <ModDetail
               mod={current}
               isActive={activeMod === current.folderName}
-              onSetActive={() => setActiveMod(current.folderName)}
+              onSetActive={() => requestSwitch(current.folderName)}
               openFile={openFile}
               gfxRoot={paths.gfxRoot}
             />
