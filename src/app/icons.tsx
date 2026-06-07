@@ -1,8 +1,41 @@
-// Minimal 16px stroke icons for the tool rail (Photoshop-style, our palette).
+// Icon palette. Two families coexist:
+//
+//   * Lucide (MIT, lucide.dev) for everything tool-shaped: editor tool
+//     rail, options-strip actions, transport, layer/history panels. They
+//     read viewBox="0 0 24 24" with stroke-2, matching the source set.
+//
+//   * Hand-rolled 16×16 stroke icons for the Home category sidebar
+//     (Characters, Tears, Familiars, etc.) and a few app-shell glyphs.
+//     Those are intentionally chunky and project-specific.
+//
+// Steam logo is Simple Icons (CC0). Mixing libraries inside one app is
+// fine when each is being used for what it's good at.
 
 interface IconProps {
   size?: number;
 }
+
+/* ---------------- Lucide (24×24 stroke-2) ---------------- */
+
+function lc(path: React.ReactNode, { size = 19 }: IconProps = {}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {path}
+    </svg>
+  );
+}
+
+/* ---------------- Hand-rolled (16×16 stroke-1.4) ---------------- */
 
 function svg(path: React.ReactNode, { size = 19 }: IconProps = {}) {
   return (
@@ -21,149 +54,361 @@ function svg(path: React.ReactNode, { size = 19 }: IconProps = {}) {
   );
 }
 
-/** Brush head + handle. The pixel editor's "pencil" is actually a 1px
- *  hard brush, hence the rename. */
-export const BrushIcon = () =>
-  svg(
-    <>
-      <path d="M3 13 L3.8 10.2 L11 3 L13 5 L5.8 12.2 Z" />
-      <path d="M10 4 L12 6" />
-    </>,
-  );
+/* ============ editor — tool rail ============ */
 
-/** Legacy alias for the (renamed) brush. Kept so other callers don't break
- *  if they import PencilIcon by name from external code. */
-export const PencilIcon = BrushIcon;
-
-/** Rectangle marquee — Photoshop's M tool. */
-export const MarqueeIcon = () =>
-  svg(
-    <>
-      <path d="M2 3 H4 M6 3 H8 M10 3 H12 M13 3 V5 M13 7 V9 M13 11 V13 M11 13 H9 M7 13 H5 M3 13 V11 M3 9 V7 M3 5 V3" />
-    </>,
-  );
-
-/** Magic wand — Photoshop's W tool. */
-export const WandIcon = () =>
-  svg(
-    <>
-      <path d="M11 3.5 L13 5.5 L5 13.5 L3 11.5 Z" />
-      <path d="M9 5.5 L11 7.5" />
-      <path d="M11 1.5 V2.5 M13.5 4 H14.5 M13.2 1.5 L12.5 2.2" />
-    </>,
-  );
-
-/** Move tool — Photoshop's V tool. Arrow + crosshair. */
+/** Photoshop's Move tool: arrow cursor with a small crosshair badge. */
 export const MoveToolIcon = () =>
-  svg(
+  lc(<path d="M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z" />);
+
+export const BrushIcon = () =>
+  lc(
     <>
-      <path d="M3 4 L3 12 L5.5 9.5 L7 13 L8.5 12.5 L7 9 L10 9 Z" />
+      <path d="m9.06 11.9 8.07-8.06a2.85 2.85 0 1 1 4.03 4.03l-8.06 8.08" />
+      <path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 0 0-3-3.02z" />
     </>,
   );
 
-/** Closed padlock — used for layer-lock UI. */
-export const LockIcon = () =>
-  svg(
+/** Pencil glyph for "edit sheet" affordances in the player Sheets panel. */
+export const PencilIcon = () =>
+  lc(
     <>
-      <rect x="4" y="7" width="8" height="7" rx="0.8" />
-      <path d="M6 7 V5.5 C6 4.1 7 3 8 3 C9 3 10 4.1 10 5.5 V7" />
-      <circle cx="8" cy="10.5" r="0.7" fill="currentColor" stroke="none" />
-    </>,
-  );
-
-/** Open padlock — alternative state for the layer-lock UI. */
-export const UnlockIcon = () =>
-  svg(
-    <>
-      <rect x="4" y="7" width="8" height="7" rx="0.8" />
-      <path d="M6 7 V5.5 C6 4.1 7 3 8 3 C9 3 10 4.1 10 5.5" />
-      <circle cx="8" cy="10.5" r="0.7" fill="currentColor" stroke="none" />
-    </>,
-  );
-
-/** Free transform — Ctrl+T action; surfaced as a tooltip hint and key. */
-export const TransformIcon = () =>
-  svg(
-    <>
-      <rect x="2.5" y="2.5" width="11" height="11" rx="0.5" />
-      <rect x="1.5" y="1.5" width="2" height="2" fill="currentColor" stroke="none" />
-      <rect x="12.5" y="1.5" width="2" height="2" fill="currentColor" stroke="none" />
-      <rect x="1.5" y="12.5" width="2" height="2" fill="currentColor" stroke="none" />
-      <rect x="12.5" y="12.5" width="2" height="2" fill="currentColor" stroke="none" />
+      <path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" />
+      <path d="m15 5 4 4" />
     </>,
   );
 
 export const EraserIcon = () =>
-  svg(
+  lc(
     <>
-      <path d="M5.5 12.5 L2.5 9.5 L8.5 3.5 L12.5 7.5 L7.5 12.5 Z" />
-      <path d="M5 13 H13" />
+      <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21" />
+      <path d="M22 21H7" />
+      <path d="m5 11 9 9" />
     </>,
   );
 
 export const DropperIcon = () =>
-  svg(
+  lc(
     <>
-      <path d="M9.5 4.5 L11.5 6.5 L5.5 12.5 L3 13 L3.5 10.5 Z" />
-      <path d="M9 3 L10.5 1.5 C11.3 0.7 12.8 0.7 13.5 1.5 C14.3 2.2 14.3 3.7 13.5 4.5 L12 6" />
+      <path d="m2 22 1-1h3l9-9" />
+      <path d="M3 21v-3l9-9" />
+      <path d="m15 6 3.4-3.4a2.121 2.121 0 1 1 3 3L18 9l.4.4a2.121 2.121 0 1 1-3 3l-3.8-3.8a2.121 2.121 0 1 1 3-3l.4.4z" />
     </>,
   );
 
-export const CursorIcon = () =>
-  svg(<path d="M4 2 L12 9 L8.5 9.5 L10.5 13.5 L8.7 14.3 L6.8 10.3 L4 12.5 Z" />);
+export const FillIcon = () =>
+  lc(
+    <>
+      <path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z" />
+      <path d="m5 2 5 5" />
+      <path d="M2 13h15" />
+      <path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z" />
+    </>,
+  );
+
+/** Lucide "square-dashed" — dashed-corner rectangle. */
+export const MarqueeIcon = () =>
+  lc(
+    <>
+      <path d="M5 3a2 2 0 0 0-2 2" />
+      <path d="M19 3a2 2 0 0 1 2 2" />
+      <path d="M21 19a2 2 0 0 1-2 2" />
+      <path d="M5 21a2 2 0 0 1-2-2" />
+      <path d="M9 3h1" />
+      <path d="M9 21h1" />
+      <path d="M14 3h1" />
+      <path d="M14 21h1" />
+      <path d="M3 9v1" />
+      <path d="M21 9v1" />
+      <path d="M3 14v1" />
+      <path d="M21 14v1" />
+    </>,
+  );
+
+export const LassoIcon = () =>
+  lc(
+    <>
+      <path d="M7 22a5 5 0 0 1-2-4" />
+      <path d="M3.3 14A6.8 6.8 0 0 1 2 10c0-4.4 4.5-8 10-8s10 3.6 10 8-4.5 8-10 8a12 12 0 0 1-5-1" />
+      <circle cx="5" cy="20" r="2" />
+    </>,
+  );
+
+/** Magic wand — Lucide "wand-sparkles" with the sparkles trimmed to keep
+ *  the tool rail clean. */
+export const WandIcon = () =>
+  lc(
+    <>
+      <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z" />
+      <path d="m14 7 3 3" />
+      <path d="M10 2v2" />
+      <path d="M7 8H3" />
+    </>,
+  );
+
+/** Pan / Hand tool. */
+export const MoveIcon = () =>
+  lc(
+    <>
+      <path d="M18 11V6a2 2 0 0 0-4 0v5" />
+      <path d="M14 10V4a2 2 0 0 0-4 0v6" />
+      <path d="M10 10.5V6a2 2 0 0 0-4 0v8" />
+      <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+    </>,
+  );
+
+/** Free Transform — Lucide "scaling". */
+export const TransformIcon = () =>
+  lc(
+    <>
+      <path d="M21 3 9 15" />
+      <path d="M12 3H3v18h18v-9" />
+      <path d="M16 3h5v5" />
+      <path d="M14 15H9v-5" />
+    </>,
+  );
+
+/* ============ editor — actions ============ */
 
 export const UndoIcon = () =>
-  svg(
+  lc(
     <>
-      <path d="M3 6 H10 C12 6 13.5 7.5 13.5 9.5 C13.5 11.5 12 13 10 13 H6" />
-      <path d="M6 3 L3 6 L6 9" />
+      <path d="M9 14 4 9l5-5" />
+      <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11" />
     </>,
   );
 
 export const RedoIcon = () =>
-  svg(
+  lc(
     <>
-      <path d="M13 6 H6 C4 6 2.5 7.5 2.5 9.5 C2.5 11.5 4 13 6 13 H10" />
-      <path d="M10 3 L13 6 L10 9" />
+      <path d="m15 14 5-5-5-5" />
+      <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5v0A5.5 5.5 0 0 0 9.5 20H13" />
     </>,
   );
 
 export const GridIcon = () =>
-  svg(
+  lc(
     <>
-      <rect x="2.5" y="2.5" width="11" height="11" rx="0.5" />
-      <path d="M2.5 8 H13.5 M8 2.5 V13.5" />
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M3 15h18" />
+      <path d="M9 3v18" />
+      <path d="M15 3v18" />
     </>,
   );
 
-export const CloseIcon = () => svg(<path d="M4 4 L12 12 M12 4 L4 12" />);
-
-export const MoveIcon = () =>
-  svg(
+export const CloseIcon = () =>
+  lc(
     <>
-      <path d="M8 1.5 V14.5 M1.5 8 H14.5" />
-      <path d="M6.3 3.2 L8 1.5 L9.7 3.2" />
-      <path d="M6.3 12.8 L8 14.5 L9.7 12.8" />
-      <path d="M3.2 6.3 L1.5 8 L3.2 9.7" />
-      <path d="M12.8 6.3 L14.5 8 L12.8 9.7" />
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
     </>,
   );
+
+export const PaletteIcon = () =>
+  lc(
+    <>
+      <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" stroke="none" />
+      <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" stroke="none" />
+      <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" stroke="none" />
+      <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" stroke="none" />
+      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
+    </>,
+  );
+
+/** Mirror brush toggle — Lucide "flip-horizontal". */
+export const MirrorIcon = () =>
+  lc(
+    <>
+      <path d="M8 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h3" />
+      <path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3" />
+      <path d="M12 20v2" />
+      <path d="M12 14v2" />
+      <path d="M12 8v2" />
+      <path d="M12 2v2" />
+    </>,
+  );
+
+/** Swap (Photoshop's FG/BG toggle). Lucide "arrow-left-right" turned diagonal. */
+export const SwapArrowsIcon = ({ size = 12 }: IconProps = {}) =>
+  lc(
+    <>
+      <path d="M8 3 4 7l4 4" />
+      <path d="M4 7h16" />
+      <path d="m16 21 4-4-4-4" />
+      <path d="M20 17H4" />
+    </>,
+    { size },
+  );
+
+/* ============ player transport ============ */
 
 export const PlayIcon = () =>
-  svg(<path d="M5 3 L12.5 8 L5 13 Z" fill="currentColor" />);
+  lc(<polygon points="6 3 20 12 6 21 6 3" fill="currentColor" />);
 
-export const HomeIcon = () =>
-  svg(<path d="M2.5 8 L8 2.5 L13.5 8 M4 7 V13.5 H12 V7" />);
-
-export const SearchIcon = () =>
-  svg(
+export const PauseIcon = () =>
+  lc(
     <>
-      <circle cx="7" cy="7" r="4.5" />
-      <path d="M10.5 10.5 L14 14" />
+      <rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" />
+      <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" />
     </>,
   );
 
-/* ---- category rail icons ---- */
+export const LoopIcon = () =>
+  lc(
+    <>
+      <path d="m17 2 4 4-4 4" />
+      <path d="M3 11v-1a4 4 0 0 1 4-4h14" />
+      <path d="m7 22-4-4 4-4" />
+      <path d="M21 13v1a4 4 0 0 1-4 4H3" />
+    </>,
+  );
+
+/** Onion skin — Lucide "layers-2". */
+export const OnionIcon = () =>
+  lc(
+    <>
+      <path d="m16.02 12 5.48 3.13a1 1 0 0 1 0 1.74L13 21.74a2 2 0 0 1-2 0l-8.5-4.87a1 1 0 0 1 0-1.74L7.98 12" />
+      <path d="M13 13.74a2 2 0 0 1-2 0L2.5 8.87a1 1 0 0 1 0-1.74L11 2.26a2 2 0 0 1 2 0l8.5 4.87a1 1 0 0 1 0 1.74Z" />
+    </>,
+  );
+
+/** Frame strip — Lucide "film". */
+export const FilmStripIcon = () =>
+  lc(
+    <>
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M7 3v18" />
+      <path d="M3 7.5h4" />
+      <path d="M3 12h18" />
+      <path d="M3 16.5h4" />
+      <path d="M17 3v18" />
+      <path d="M17 7.5h4" />
+      <path d="M17 16.5h4" />
+    </>,
+  );
+
+/** Zoom — Lucide "search". */
+export const MagnifierIcon = () =>
+  lc(
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </>,
+  );
+
+/* ============ panels / common ============ */
+
+export const PlusIcon = () =>
+  lc(
+    <>
+      <path d="M5 12h14" />
+      <path d="M12 5v14" />
+    </>,
+  );
+
+export const EyeIcon = () =>
+  lc(
+    <>
+      <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+      <circle cx="12" cy="12" r="3" />
+    </>,
+  );
+
+export const EyeOffIcon = () =>
+  lc(
+    <>
+      <path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" />
+      <path d="M14.084 14.158a3 3 0 0 1-4.242-4.242" />
+      <path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" />
+      <path d="m2 2 20 20" />
+    </>,
+  );
+
+export const ChevronUpIcon = () => lc(<path d="m18 15-6-6-6 6" />);
+export const ChevronDownIcon = () => lc(<path d="m6 9 6 6 6-6" />);
+
+export const LockIcon = () =>
+  lc(
+    <>
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </>,
+  );
+
+export const UnlockIcon = () =>
+  lc(
+    <>
+      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+    </>,
+  );
+
+export const CopyIcon = () =>
+  lc(
+    <>
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </>,
+  );
+
+export const TrashIcon = () =>
+  lc(
+    <>
+      <path d="M3 6h18" />
+      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+    </>,
+  );
+
+/* ============ app shell ============ */
+
+export const HomeIcon = () =>
+  lc(
+    <>
+      <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <polyline points="9 22 9 12 15 12 15 22" />
+    </>,
+  );
+
+export const SearchIcon = () =>
+  lc(
+    <>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </>,
+  );
+
+export const GearIcon = () =>
+  lc(
+    <>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      <circle cx="12" cy="12" r="3" />
+    </>,
+  );
+
+export const FolderIcon = () =>
+  lc(<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />);
+
+/** Folder with a gear — the Mods tab. */
+export const FolderGearIcon = () =>
+  lc(
+    <>
+      <path d="M19 6.5a2 2 0 0 0-2-2h-5l-2-2H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h6" />
+      <circle cx="18" cy="18" r="3" />
+      <path d="M18 14v1" />
+      <path d="M18 21v1" />
+      <path d="m22 18-1 0" />
+      <path d="m15 18-1 0" />
+      <path d="m21 15-.7.7" />
+      <path d="m15.7 20.3-.7.7" />
+      <path d="m21 21-.7-.7" />
+      <path d="m15.7 15.7-.7-.7" />
+    </>,
+  );
+
+/* ============ Home category rail (kept as-is — hand-rolled) ============ */
 
 export const PersonIcon = () =>
   svg(
@@ -238,101 +483,10 @@ export const FilmIcon = () =>
     </>,
   );
 
-export const GearIcon = () =>
-  svg(
-    <>
-      <circle cx="8" cy="8" r="2.2" />
-      <path d="M8 1.8 V3.6 M8 12.4 V14.2 M1.8 8 H3.6 M12.4 8 H14.2 M3.6 3.6 L4.9 4.9 M11.1 11.1 L12.4 12.4 M12.4 3.6 L11.1 4.9 M4.9 11.1 L3.6 12.4" />
-      <circle cx="8" cy="8" r="4.6" />
-    </>,
-  );
-
-export const FolderIcon = () =>
-  svg(<path d="M2 4 C2 3.4 2.4 3 3 3 H6 L7.5 4.8 H13 C13.6 4.8 14 5.2 14 5.8 V12 C14 12.6 13.6 13 13 13 H3 C2.4 13 2 12.6 2 12 Z" />);
-
-/** Folder with a small gear in the corner — used for the Mods tab. */
-export const FolderGearIcon = () =>
-  svg(
-    <>
-      <path d="M2 4 C2 3.4 2.4 3 3 3 H6 L7.5 4.8 H13 C13.6 4.8 14 5.2 14 5.8 V12 C14 12.6 13.6 13 13 13 H3 C2.4 13 2 12.6 2 12 Z" />
-      <circle cx="11.3" cy="10.3" r="1.3" fill="var(--bg-raised)" />
-      <path
-        d="M11.3 8.4 V9.2 M11.3 11.4 V12.2 M9.4 10.3 H10.2 M12.4 10.3 H13.2 M9.95 8.95 L10.5 9.5 M12.1 11.1 L12.65 11.65 M12.65 8.95 L12.1 9.5 M10.5 11.1 L9.95 11.65"
-        strokeWidth="0.9"
-      />
-    </>,
-  );
-
-export const PaletteIcon = () =>
-  svg(
-    <>
-      <path d="M8 1.8 C4.4 1.8 1.5 4.4 1.5 7.7 C1.5 10.3 3.4 12.2 5.7 12.2 C6.6 12.2 7 11.7 7 11 C7 10.4 6.6 10 7.4 10 H10.4 C12.1 10 13.5 8.6 13.5 6.8 C13.5 4 11 1.8 8 1.8 Z" />
-      <circle cx="4.6" cy="7.2" r="0.85" fill="currentColor" stroke="none" />
-      <circle cx="6.5" cy="4.4" r="0.85" fill="currentColor" stroke="none" />
-      <circle cx="9.6" cy="4.2" r="0.85" fill="currentColor" stroke="none" />
-      <circle cx="11.7" cy="6.6" r="0.85" fill="currentColor" stroke="none" />
-    </>,
-  );
-
-export const LoopIcon = () =>
-  svg(
-    <>
-      <path d="M3.2 9 A4.8 4.8 0 0 1 12.4 6.6" />
-      <path d="M9.8 4.4 L12.4 6.6 L10.2 9.2" />
-      <path d="M12.8 7 A4.8 4.8 0 0 1 3.6 9.4" />
-      <path d="M6.2 11.6 L3.6 9.4 L5.8 6.8" />
-    </>,
-  );
-
-export const FilmStripIcon = () =>
-  svg(
-    <>
-      <rect x="2" y="4" width="12" height="8" rx="1" />
-      <path d="M5 4 V12 M8 4 V12 M11 4 V12" />
-    </>,
-  );
-
-export const OnionIcon = () =>
-  svg(
-    <>
-      <rect x="1.5" y="4.5" width="8" height="8" rx="1" opacity="0.4" />
-      <rect x="6.5" y="3.5" width="8" height="8" rx="1" />
-    </>,
-  );
-
-export const MagnifierIcon = () =>
-  svg(
-    <>
-      <circle cx="7" cy="7" r="4" />
-      <path d="M10 10 L14 14" />
-      <path d="M5 7 H9 M7 5 V9" strokeWidth="1.1" />
-    </>,
-  );
-
-export const CopyIcon = () =>
-  svg(
-    <>
-      <rect x="5" y="3" width="8" height="9" rx="1" />
-      <path d="M3 5 V12.5 C3 13.3 3.6 14 4.5 14 H10.5" />
-    </>,
-  );
-
-export const TrashIcon = () =>
-  svg(
-    <>
-      <path d="M3 4 H13" />
-      <path d="M5.5 4 V3 C5.5 2.4 5.9 2 6.5 2 H9.5 C10.1 2 10.5 2.4 10.5 3 V4" />
-      <path d="M4.5 4 L5.3 13 C5.4 13.6 5.9 14 6.5 14 H9.5 C10.1 14 10.6 13.6 10.7 13 L11.5 4" />
-      <path d="M7 7 V11 M9 7 V11" />
-    </>,
-  );
+/* ============ brand ============ */
 
 /**
- * Steam logo — Simple Icons SVG path (CC0, public domain). The 24×24
- * viewBox is intentional: this isn't drawn from our stroke primitives,
- * it's the actual Valve mark, filled in currentColor so the parent's
- * blue tint flows through.
- *
+ * Steam logo — Simple Icons SVG path (CC0). For tagging Workshop mods.
  * Source: github.com/simple-icons/simple-icons/blob/develop/icons/steam.svg
  */
 export const SteamIcon = () => (
@@ -346,41 +500,3 @@ export const SteamIcon = () => (
     <path d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.999 1.314 1.25 1.297.539 2.793-.076 3.332-1.375.263-.63.264-1.319.005-1.949s-.75-1.121-1.377-1.383c-.624-.26-1.29-.249-1.878-.03l1.523.63c.956.4 1.409 1.5 1.009 2.455-.397.957-1.497 1.41-2.454 1.012H7.54zm11.415-9.303c0-1.662-1.353-3.015-3.015-3.015-1.665 0-3.015 1.353-3.015 3.015 0 1.665 1.35 3.015 3.015 3.015 1.663 0 3.015-1.35 3.015-3.015zm-5.273-.005c0-1.252 1.013-2.266 2.265-2.266 1.249 0 2.266 1.014 2.266 2.266 0 1.251-1.017 2.265-2.266 2.265-1.253 0-2.265-1.014-2.265-2.265z" />
   </svg>
 );
-
-/** New / plus action. */
-export const PlusIcon = () =>
-  svg(<path d="M8 3 V13 M3 8 H13" strokeWidth="1.7" />);
-
-/** Open eye — visible layer state. */
-export const EyeIcon = () =>
-  svg(
-    <>
-      <path d="M1.5 8 C3.5 4.5 5.5 3 8 3 C10.5 3 12.5 4.5 14.5 8 C12.5 11.5 10.5 13 8 13 C5.5 13 3.5 11.5 1.5 8 Z" />
-      <circle cx="8" cy="8" r="2.2" />
-    </>,
-  );
-
-/** Closed eye (eye-slash) — hidden layer state. */
-export const EyeOffIcon = () =>
-  svg(
-    <>
-      <path d="M2.5 5.5 C4 4 6 3 8 3 C10.5 3 12.5 4.5 14.5 8 C13.7 9.4 12.8 10.5 11.9 11.3" />
-      <path d="M10.4 12.3 C9.6 12.7 8.8 13 8 13 C5.5 13 3.5 11.5 1.5 8 C2 7.1 2.6 6.3 3.2 5.7" />
-      <path d="M2 2 L14 14" strokeWidth="1.4" />
-    </>,
-  );
-
-/** Up / down chevrons for reordering. */
-export const ChevronUpIcon = () =>
-  svg(<path d="M3 10 L8 5 L13 10" strokeWidth="1.7" />);
-
-export const ChevronDownIcon = () =>
-  svg(<path d="M3 6 L8 11 L13 6" strokeWidth="1.7" />);
-
-export const PauseIcon = () =>
-  svg(
-    <>
-      <path d="M5.5 3.5 V12.5" strokeWidth="2.4" />
-      <path d="M10.5 3.5 V12.5" strokeWidth="2.4" />
-    </>,
-  );
