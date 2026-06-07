@@ -2,9 +2,10 @@
 // selected mod in the middle, side-by-side / overlay diff on the right.
 // First-run state is a hint card explaining the concept of an "active mod".
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppStore } from "../../app/store";
 import { listMods, type ModSummary } from "../../lib/mods/listMods";
+import type { ModFile } from "../../lib/mods/fileTree";
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -19,6 +20,7 @@ export function ModsPanel() {
   const [mods, setMods] = useState<ModSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
+  const [openFile, setOpenFile] = useState<ModFile | null>(null);
 
   useEffect(() => {
     if (!paths) return;
@@ -33,6 +35,12 @@ export function ModsPanel() {
       cancelled = true;
     };
   }, [paths]);
+
+  // Drop the open file when the mod changes — it doesn't belong to the new
+  // mod's tree.
+  useEffect(() => {
+    setOpenFile(null);
+  }, [selected]);
 
   if (!paths) return null;
   const current = mods.find((m) => m.folderName === selected) ?? null;
@@ -72,17 +80,32 @@ export function ModsPanel() {
             })}
         </div>
       </aside>
-      <section className="mods-detail">
-        {current ? (
-          <ModDetail
-            mod={current}
-            isActive={activeMod === current.folderName}
-            onSetActive={() => setActiveMod(current.folderName)}
-          />
-        ) : (
+      {current ? (
+        <>
+          <aside className="mods-files">
+            <header className="panel-header">
+              Files <span className="panel-count">{current.files.length}</span>
+            </header>
+            <FileTree
+              files={current.files}
+              selected={openFile?.rel ?? null}
+              onSelect={setOpenFile}
+            />
+          </aside>
+          <section className="mods-detail">
+            <ModDetail
+              mod={current}
+              isActive={activeMod === current.folderName}
+              onSetActive={() => setActiveMod(current.folderName)}
+              openFile={openFile}
+            />
+          </section>
+        </>
+      ) : (
+        <section className="mods-detail">
           <EmptyDetail />
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
@@ -95,14 +118,82 @@ function EmptyDetail() {
   );
 }
 
+interface TreeGroup {
+  dir: string;
+  files: ModFile[];
+}
+
+/** Flat-list-with-folder-headers; cheap and reads fine for ≤200 files. */
+function FileTree({
+  files,
+  selected,
+  onSelect,
+}: {
+  files: ModFile[];
+  selected: string | null;
+  onSelect: (file: ModFile) => void;
+}) {
+  const groups: TreeGroup[] = useMemo(() => {
+    const byDir = new Map<string, ModFile[]>();
+    for (const f of files) {
+      const i = f.rel.lastIndexOf("/");
+      const dir = i === -1 ? "" : f.rel.slice(0, i);
+      const arr = byDir.get(dir) ?? [];
+      arr.push(f);
+      byDir.set(dir, arr);
+    }
+    return [...byDir.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dir, items]) => ({
+        dir,
+        files: items.sort((a, b) => a.rel.localeCompare(b.rel)),
+      }));
+  }, [files]);
+
+  if (files.length === 0) {
+    return (
+      <div className="detail-empty">
+        No files under <code>resources/gfx/</code> yet.
+      </div>
+    );
+  }
+  return (
+    <div className="panel-body mods-file-tree">
+      {groups.map((g) => (
+        <div key={g.dir || "(root)"}>
+          <div className="mods-file-dir">{g.dir || "(root)"}</div>
+          {g.files.map((f) => {
+            const name = f.rel.slice(g.dir.length).replace(/^\//, "");
+            return (
+              <button
+                key={f.rel}
+                className={`mods-file-row${
+                  selected === f.rel ? " selected" : ""
+                }`}
+                onClick={() => onSelect(f)}
+                title={f.rel}
+              >
+                <span className="mods-file-name">{name}</span>
+                <span className="mods-file-bytes">{fmtBytes(f.bytes)}</span>
+              </button>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ModDetail({
   mod,
   isActive,
   onSetActive,
+  openFile,
 }: {
   mod: ModSummary;
   isActive: boolean;
   onSetActive: () => void;
+  openFile: ModFile | null;
 }) {
   return (
     <div className="mod-detail">
@@ -130,9 +221,15 @@ function ModDetail({
           <p className="mod-detail-desc">{mod.metadata.description}</p>
         )}
       </header>
-      <div className="detail-empty">
-        File tree + diff coming next (M6.5–M6.7).
-      </div>
+      {openFile ? (
+        <div className="detail-empty">
+          Diff viewer for <code>{openFile.rel}</code> is coming next (M6.6).
+        </div>
+      ) : (
+        <div className="detail-empty">
+          Pick a file on the left to compare it with vanilla.
+        </div>
+      )}
     </div>
   );
 }
