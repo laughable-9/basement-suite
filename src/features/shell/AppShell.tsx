@@ -85,6 +85,7 @@ export function AppShell() {
   const catalog = useAppStore((s) => s.catalog);
   const playbackSpeed = useAppStore((s) => s.playbackSpeed);
   const setPlaybackSpeed = useAppStore((s) => s.setPlaybackSpeed);
+  const activeMod = useAppStore((s) => s.activeMod);
   const [logo, setLogo] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -238,8 +239,8 @@ export function AppShell() {
           />
           <span className="speed-value">{playbackSpeed.toFixed(1)}×</span>
         </label>
-        <span title="Last used mod folder">
-          mod: {localStorage.getItem("bs:lastModName") ?? "—"}
+        <span title="Active mod — saves land here, previews overlay from here">
+          mod: {activeMod ?? "—"}
         </span>
       </footer>
     </div>

@@ -14,6 +14,8 @@ function fmtBytes(n: number): string {
 
 export function ModsPanel() {
   const paths = useAppStore((s) => s.paths);
+  const activeMod = useAppStore((s) => s.activeMod);
+  const setActiveMod = useAppStore((s) => s.setActiveMod);
   const [mods, setMods] = useState<ModSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
@@ -45,27 +47,41 @@ export function ModsPanel() {
           {loading && <div className="detail-empty">Scanning mods…</div>}
           {!loading && mods.length === 0 && <FirstRunHint />}
           {!loading &&
-            mods.map((m) => (
-              <button
-                key={m.folderName}
-                className={`mod-row${
-                  selected === m.folderName ? " selected" : ""
-                }`}
-                onClick={() => setSelected(m.folderName)}
-                title={m.path}
-              >
-                <span className="mod-row-name">{m.displayName}</span>
-                <span className="mod-row-meta">
-                  {m.files.length} file{m.files.length === 1 ? "" : "s"}
-                  {m.metadata.version ? ` · v${m.metadata.version}` : ""}
-                  {` · ${fmtBytes(m.totalBytes)}`}
-                </span>
-              </button>
-            ))}
+            mods.map((m) => {
+              const isActive = activeMod === m.folderName;
+              return (
+                <button
+                  key={m.folderName}
+                  className={`mod-row${
+                    selected === m.folderName ? " selected" : ""
+                  }${isActive ? " is-active" : ""}`}
+                  onClick={() => setSelected(m.folderName)}
+                  title={m.path}
+                >
+                  <span className="mod-row-name">
+                    {m.displayName}
+                    {isActive && <span className="mod-active-badge">active</span>}
+                  </span>
+                  <span className="mod-row-meta">
+                    {m.files.length} file{m.files.length === 1 ? "" : "s"}
+                    {m.metadata.version ? ` · v${m.metadata.version}` : ""}
+                    {` · ${fmtBytes(m.totalBytes)}`}
+                  </span>
+                </button>
+              );
+            })}
         </div>
       </aside>
       <section className="mods-detail">
-        {current ? <ModDetail mod={current} /> : <EmptyDetail />}
+        {current ? (
+          <ModDetail
+            mod={current}
+            isActive={activeMod === current.folderName}
+            onSetActive={() => setActiveMod(current.folderName)}
+          />
+        ) : (
+          <EmptyDetail />
+        )}
       </section>
     </div>
   );
@@ -79,11 +95,33 @@ function EmptyDetail() {
   );
 }
 
-function ModDetail({ mod }: { mod: ModSummary }) {
+function ModDetail({
+  mod,
+  isActive,
+  onSetActive,
+}: {
+  mod: ModSummary;
+  isActive: boolean;
+  onSetActive: () => void;
+}) {
   return (
     <div className="mod-detail">
       <header className="mod-detail-header">
-        <h2>{mod.displayName}</h2>
+        <div className="mod-detail-title">
+          <h2>{mod.displayName}</h2>
+          <button
+            className="save-btn"
+            disabled={isActive}
+            onClick={onSetActive}
+            title={
+              isActive
+                ? "This is already the active mod"
+                : "Make this the active mod (saves go here, previews overlay from here)"
+            }
+          >
+            {isActive ? "Active" : "Set as active"}
+          </button>
+        </div>
         <div className="mod-detail-meta">
           {mod.folderName}
           {mod.metadata.version ? ` · v${mod.metadata.version}` : ""}
