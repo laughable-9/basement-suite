@@ -1,6 +1,5 @@
 // One animation in the AnimGrid — rendered static thumbnail (first frame).
-// The card's name label is enough to identify it; no hover-play (the user
-// found the moving thumbs distracting and the title is already shown).
+// The card's name label is enough to identify it; no hover-play (would distract).
 // Live link still wired: editing a sheet redraws the resting thumb.
 
 import { useEffect, useRef } from "react";
@@ -8,6 +7,7 @@ import { subscribeSheet } from "../../lib/sheets/store";
 import { buildAnimScene, drawThumb, type ThumbScene } from "../home/renderThumb";
 
 interface Props {
+  /** Scene tied to this card's animation source (player anm2 OR costume anm2) */
   baseScene: ThumbScene;
   animName: string;
   frameNum: number;
@@ -40,7 +40,6 @@ export function AnimCard({
     const observer = new IntersectionObserver(([hit]) => {
       if (!hit.isIntersecting) return;
       observer.disconnect();
-      // Match buffer to layout; otherwise canvas stretches the bitmap.
       const box = canvas.parentElement!;
       canvas.width = Math.max(32, box.clientWidth);
       canvas.height = Math.max(32, box.clientHeight);

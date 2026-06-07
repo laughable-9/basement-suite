@@ -1,31 +1,32 @@
 // Virtualized animation card grid — only renders rows currently in view, so
 // 49-anim corpus stress files (props_07_the corpse) stay smooth.
+// Items can come from multiple anm2s (player + costume-exclusive) so each
+// card carries its own baseScene.
 
 import { useEffect, useRef, useState } from "react";
-import type { Anm2Animation } from "../../lib/anm2/types";
 import { AnimCard } from "./AnimCard";
 import type { ThumbScene } from "../home/renderThumb";
 
 const CARD_W = 132;
-// Tall enough that thumb aspect-ratio:1 + name + meta fit without stretching.
 const CARD_H = 172;
 const OVERSCAN_ROWS = 2;
 
-interface Props {
+export interface AnimItem {
+  /** Scene tied to the anm2 owning this animation */
   baseScene: ThumbScene;
-  animations: Anm2Animation[];
-  selectedName: string;
-  defaultName: string;
-  onSelect: (name: string) => void;
+  animName: string;
+  frameNum: number;
+  loops: boolean;
+  isDefault: boolean;
 }
 
-export function AnimGrid({
-  baseScene,
-  animations,
-  selectedName,
-  defaultName,
-  onSelect,
-}: Props) {
+interface Props {
+  items: AnimItem[];
+  selectedName: string;
+  onSelect: (item: AnimItem) => void;
+}
+
+export function AnimGrid({ items, selectedName, onSelect }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [vp, setVp] = useState({ w: 800, h: 600, scrollTop: 0 });
 
@@ -49,7 +50,7 @@ export function AnimGrid({
   }, []);
 
   const cols = Math.max(1, Math.floor((vp.w - 16) / CARD_W));
-  const rows = Math.ceil(animations.length / cols);
+  const rows = Math.ceil(items.length / cols);
   const firstRow = Math.max(
     0,
     Math.floor(vp.scrollTop / CARD_H) - OVERSCAN_ROWS,
@@ -59,21 +60,21 @@ export function AnimGrid({
     Math.ceil((vp.scrollTop + vp.h) / CARD_H) + OVERSCAN_ROWS,
   );
 
-  const visible: { anim: Anm2Animation; row: number; col: number }[] = [];
+  const visible: { item: AnimItem; idx: number; row: number; col: number }[] = [];
   for (let row = firstRow; row < lastRow; row++) {
     for (let col = 0; col < cols; col++) {
       const i = row * cols + col;
-      if (i >= animations.length) break;
-      visible.push({ anim: animations[i], row, col });
+      if (i >= items.length) break;
+      visible.push({ item: items[i], idx: i, row, col });
     }
   }
 
   return (
     <div ref={ref} className="anim-grid">
       <div style={{ position: "relative", height: rows * CARD_H }}>
-        {visible.map(({ anim, row, col }) => (
+        {visible.map(({ item, idx, row, col }) => (
           <div
-            key={`${anim.name}-${row * cols + col}`}
+            key={`${item.animName}-${idx}`}
             style={{
               position: "absolute",
               top: row * CARD_H,
@@ -83,13 +84,13 @@ export function AnimGrid({
             }}
           >
             <AnimCard
-              baseScene={baseScene}
-              animName={anim.name}
-              frameNum={anim.frameNum}
-              loops={anim.loop}
-              isDefault={anim.name === defaultName}
-              selected={anim.name === selectedName}
-              onSelect={() => onSelect(anim.name)}
+              baseScene={item.baseScene}
+              animName={item.animName}
+              frameNum={item.frameNum}
+              loops={item.loops}
+              isDefault={item.isDefault}
+              selected={item.animName === selectedName}
+              onSelect={() => onSelect(item)}
             />
           </div>
         ))}

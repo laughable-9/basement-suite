@@ -13,8 +13,11 @@ import { loadAnm2Sheets, subscribeSheet } from "../../lib/sheets/store";
 import { useAppStore } from "../../app/store";
 import { OnionIcon, PauseIcon, PencilIcon, PlayIcon } from "../../app/icons";
 import { renderFrame, type SheetMap } from "./render";
-import { AnimGrid } from "./AnimGrid";
+import { AnimGrid, type AnimItem } from "./AnimGrid";
 import type { ThumbScene } from "../home/renderThumb";
+
+/** Where a selected animation lives — drives the banner render path. */
+type AnimSource = "player" | "costume";
 
 const ZOOMS = [1, 2, 3, 4, 6, 8, 12, 16];
 /** Breathing room around the sprite in fit mode (px per side) */
@@ -191,22 +194,47 @@ export function Player({
     };
   }, [path, skinPath, costumePath]);
 
-  const anim: Anm2Animation | undefined = loaded?.anm2.animations.find(
-    (a) => a.name === animName,
-  );
+  // Resolve the active animation by searching the player anm2 first, then
+  // the costume anm2 (which carries Azazel's HeadDownShoot/Charge etc.).
+  // The source decides which anm2/sheets the banner renders against.
+  const playerAnim = loaded?.anm2.animations.find((a) => a.name === animName);
+  const costumeAnim =
+    !playerAnim && loaded?.costume
+      ? loaded.costume.anm2.animations.find((a) => a.name === animName)
+      : undefined;
+  const animSource: AnimSource = playerAnim ? "player" : "costume";
+  const anim: Anm2Animation | undefined = playerAnim ?? costumeAnim;
+  const renderAnm2 =
+    animSource === "costume" && loaded?.costume
+      ? loaded.costume.anm2
+      : loaded?.anm2;
+  const renderSheets =
+    animSource === "costume" && loaded?.costume
+      ? loaded.costume.sheets
+      : loaded?.sheets;
 
+  // Body+head pairing only makes sense for player anims (character compose).
   const headAnim: Anm2Animation | null =
-    skinPath && anim && loaded ? headAnimFor(loaded.anm2, anim) : null;
+    skinPath && playerAnim && loaded
+      ? headAnimFor(loaded.anm2, playerAnim)
+      : null;
 
-  // Editor crop-grid click → jump to that animation/frame, paused.
+  // Editor crop-grid click → jump to that animation/frame, paused. The
+  // editor's anm2 may be either the player anm2 or the costume anm2 (when
+  // the user edits a head/costume sheet), so accept either source.
   const consumedJumpRef = useRef(0);
   useEffect(() => {
     if (!playerJump || !loaded) return;
     if (tabId !== undefined && playerJump.tabId !== tabId) return;
     if (playerJump.seq === consumedJumpRef.current) return;
+    const inPlayer = loaded.anm2.animations.some(
+      (a) => a.name === playerJump.animName,
+    );
+    const inCostume = loaded.costume?.anm2.animations.some(
+      (a) => a.name === playerJump.animName,
+    );
+    if (!inPlayer && !inCostume) return;
     consumedJumpRef.current = playerJump.seq;
-    if (!loaded.anm2.animations.some((a) => a.name === playerJump.animName))
-      return;
     setAnimName(playerJump.animName);
     setTick(playerJump.tick);
     setPlaying(false);
@@ -229,14 +257,18 @@ export function Player({
     return b;
   }, [anim, headAnim]);
 
-  // Playback clock
+  // Playback clock — costume anims use the costume anm2's fps, not the
+  // player's, so a 24 fps Charge animation paces correctly.
   useEffect(() => {
     if (!active || !playing || !loaded || !anim || anim.frameNum <= 0) return;
     let raf = 0;
     let last = performance.now();
+    const fps =
+      animSource === "costume" && loaded.costume
+        ? loaded.costume.anm2.info.fps
+        : loaded.anm2.info.fps;
     const step = (now: number) => {
-      const dt =
-        ((now - last) / 1000) * loaded.anm2.info.fps * playbackSpeed;
+      const dt = ((now - last) / 1000) * fps * playbackSpeed;
       last = now;
       setTick((t) => {
         const t2 = t + dt;
@@ -250,7 +282,7 @@ export function Player({
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [active, playing, loaded, anim, playbackSpeed]);
+  }, [active, playing, loaded, anim, animSource, playbackSpeed]);
 
   // Banner stage repaint
   useEffect(() => {
@@ -287,7 +319,7 @@ export function Player({
     }
     ctx.translate(stage.w / 2 - cx * z, stage.h / 2 - cy * z);
     ctx.scale(z, z);
-    if (anim && anim.frameNum > 0) {
+    if (anim && anim.frameNum > 0 && renderAnm2 && renderSheets) {
       if (onion && anim.frameNum > 1) {
         const f = Math.floor(tick);
         const wrap = (t: number) =>
@@ -297,30 +329,52 @@ export function Player({
         const prev = wrap(f - 1);
         const next = wrap(f + 1);
         if (prev >= 0 && prev < anim.frameNum && prev !== f) {
-          renderFrame(ctx, loaded.anm2, anim, prev, loaded.sheets, 0.25);
+          renderFrame(ctx, renderAnm2, anim, prev, renderSheets, 0.25);
         }
         if (next >= 0 && next < anim.frameNum && next !== f) {
-          renderFrame(ctx, loaded.anm2, anim, next, loaded.sheets, 0.25);
+          renderFrame(ctx, renderAnm2, anim, next, renderSheets, 0.25);
         }
       }
-      const costume = loaded.costume;
-      const cBody = costume?.anm2.animations.find((a) => a.name === anim.name);
-      const cHead =
-        headAnim &&
-        costume?.anm2.animations.find((a) => a.name === headAnim.name);
-      const at = (a: Anm2Animation) => tick % Math.max(1, a.frameNum);
-      if (costume && cBody) {
-        renderFrame(ctx, costume.anm2, cBody, at(cBody), costume.sheets);
-      }
-      renderFrame(ctx, loaded.anm2, anim, tick, loaded.sheets);
-      if (headAnim && headAnim.frameNum > 0) {
-        renderFrame(ctx, loaded.anm2, headAnim, at(headAnim), loaded.sheets);
-      }
-      if (costume && cHead) {
-        renderFrame(ctx, costume.anm2, cHead, at(cHead), costume.sheets);
+      if (animSource === "player") {
+        // Character composite: body anm2 + matching costume + paired head.
+        const costume = loaded.costume;
+        const cBody = costume?.anm2.animations.find(
+          (a) => a.name === anim.name,
+        );
+        const cHead =
+          headAnim &&
+          costume?.anm2.animations.find((a) => a.name === headAnim.name);
+        const at = (a: Anm2Animation) => tick % Math.max(1, a.frameNum);
+        if (costume && cBody) {
+          renderFrame(ctx, costume.anm2, cBody, at(cBody), costume.sheets);
+        }
+        renderFrame(ctx, loaded.anm2, anim, tick, loaded.sheets);
+        if (headAnim && headAnim.frameNum > 0) {
+          renderFrame(ctx, loaded.anm2, headAnim, at(headAnim), loaded.sheets);
+        }
+        if (costume && cHead) {
+          renderFrame(ctx, costume.anm2, cHead, at(cHead), costume.sheets);
+        }
+      } else {
+        // Costume-exclusive anim (e.g. HeadDownShoot): render it alone, no
+        // body — the body anm2 has no matching state to pair with.
+        renderFrame(ctx, renderAnm2, anim, tick, renderSheets);
       }
     }
-  }, [loaded, anim, headAnim, tick, zoom, sheetRev, onion, stage, bounds]);
+  }, [
+    loaded,
+    anim,
+    animSource,
+    headAnim,
+    renderAnm2,
+    renderSheets,
+    tick,
+    zoom,
+    sheetRev,
+    onion,
+    stage,
+    bounds,
+  ]);
 
   const selectAnim = useCallback((name: string) => {
     setAnimName(name);
@@ -332,6 +386,52 @@ export function Player({
     () => (loaded ? loadedToBaseScene(loaded, !!skinPath) : null),
     [loaded, skinPath],
   );
+
+  // Costume baseScene — only used as the source for costume-exclusive cards
+  // (HeadDownShoot etc.). Renders the costume anm2 alone, no body compose.
+  const costumeBaseScene: ThumbScene | null = useMemo(() => {
+    if (!loaded?.costume) return null;
+    const def =
+      loaded.costume.anm2.animations.find(
+        (a) => a.name === loaded.costume!.anm2.defaultAnimation,
+      ) ?? loaded.costume.anm2.animations[0];
+    if (!def) return null;
+    return {
+      anm2: loaded.costume.anm2,
+      anim: def,
+      headAnim: null,
+      costume: null,
+      sheets: loaded.costume.sheets,
+      fps: loaded.costume.anm2.info.fps,
+      sheetPaths: [...loaded.costume.byId.values()],
+    };
+  }, [loaded]);
+
+  // Merge player + costume-exclusive animations into one grid feed.
+  // Costume anims that share a name with player anims would render twice and
+  // confuse selection (which one plays?), so dedupe by name with player win.
+  const gridItems = useMemo<AnimItem[]>(() => {
+    if (!loaded || !baseScene) return [];
+    const playerItems: AnimItem[] = loaded.anm2.animations.map((a) => ({
+      baseScene,
+      animName: a.name,
+      frameNum: a.frameNum,
+      loops: a.loop,
+      isDefault: a.name === loaded.anm2.defaultAnimation,
+    }));
+    if (!loaded.costume || !costumeBaseScene) return playerItems;
+    const playerNames = new Set(loaded.anm2.animations.map((a) => a.name));
+    const costumeItems: AnimItem[] = loaded.costume.anm2.animations
+      .filter((a) => !playerNames.has(a.name) && a.frameNum > 0)
+      .map((a) => ({
+        baseScene: costumeBaseScene,
+        animName: a.name,
+        frameNum: a.frameNum,
+        loops: a.loop,
+        isDefault: false,
+      }));
+    return [...playerItems, ...costumeItems];
+  }, [loaded, baseScene, costumeBaseScene]);
 
   if (error) return <div className="detail-error">{error}</div>;
   if (!loaded) return <div className="detail-empty">Loading…</div>;
@@ -509,36 +609,43 @@ export function Player({
     return (
       <div className="player player-stack">
         <div className="player-header">
-          <span className="live-badge" title="Mirrors your edits in real time">
-            LIVE PREVIEW
+          <span
+            className="player-title"
+            title="Mirrors your edits in real time"
+          >
+            Live Preview{title ? `: ${title}` : ""}
           </span>
-          {title && <span className="player-title">{title}</span>}
         </div>
         {banner}
         <div className="player-stack-panels">
           <section className="player-anims-list">
             <header className="panel-header">
-              Animations <span className="panel-count">{anm2.animations.length}</span>
+              Animations{" "}
+              <span className="panel-count">{gridItems.length}</span>
             </header>
             <div className="panel-body">
               <table className="anim-table">
                 <tbody>
-                  {anm2.animations.map((a, i) => (
+                  {gridItems.map((item, i) => (
                     <tr
-                      key={`${a.name}-${i}`}
+                      key={`${item.animName}-${i}`}
                       className={
-                        a.name === animName ? "anim-row-active" : "anim-row"
+                        item.animName === animName
+                          ? "anim-row-active"
+                          : "anim-row"
                       }
-                      onClick={() => selectAnim(a.name)}
+                      onClick={() => selectAnim(item.animName)}
                     >
                       <td>
-                        {a.name}
-                        {a.name === anm2.defaultAnimation && (
+                        {item.animName}
+                        {item.isDefault && (
                           <span className="default-badge">default</span>
                         )}
                       </td>
-                      <td className="anim-col-num">{a.frameNum}</td>
-                      <td className="anim-col-num">{a.loop ? "↻" : ""}</td>
+                      <td className="anim-col-num">{item.frameNum}</td>
+                      <td className="anim-col-num">
+                        {item.loops ? "↻" : ""}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -559,21 +666,19 @@ export function Player({
           {title && <span className="player-title">{title}</span>}
           <span className="toolbar-spacer" />
           <span className="player-meta">
-            {anm2.animations.length} animations
+            {gridItems.length} animations
           </span>
         </div>
         {banner}
         <header className="anim-grid-header">
           <span>ANIMATIONS</span>
-          <span className="panel-count">{anm2.animations.length}</span>
+          <span className="panel-count">{gridItems.length}</span>
         </header>
-        {baseScene ? (
+        {gridItems.length > 0 ? (
           <AnimGrid
-            baseScene={baseScene}
-            animations={anm2.animations}
+            items={gridItems}
             selectedName={animName}
-            defaultName={anm2.defaultAnimation}
-            onSelect={selectAnim}
+            onSelect={(item) => selectAnim(item.animName)}
           />
         ) : (
           <div className="detail-empty">No animations</div>
