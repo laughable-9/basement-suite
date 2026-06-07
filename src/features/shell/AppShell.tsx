@@ -177,20 +177,21 @@ export function AppShell() {
       </header>
 
       <div className="shell-body">
-        <aside className="category-rail">
-          {RAIL.map((c) => (
-            <button
-              key={c.id}
-              className={`rail-btn${
-                activeTabId === "home" && home.category === c.id ? " active" : ""
-              }`}
-              title={c.label}
-              onClick={() => setHome({ category: c.id, subcategory: null })}
-            >
-              <c.icon />
-            </button>
-          ))}
-        </aside>
+        {/* Browser chrome belongs to Home — entity tabs get the full width */}
+        {activeTabId === "home" && (
+          <aside className="category-rail">
+            {RAIL.map((c) => (
+              <button
+                key={c.id}
+                className={`rail-btn${home.category === c.id ? " active" : ""}`}
+                title={c.label}
+                onClick={() => setHome({ category: c.id, subcategory: null })}
+              >
+                <c.icon />
+              </button>
+            ))}
+          </aside>
+        )}
 
         <main className="shell-content">
           {/* All tabs stay mounted so editor/player state survives switches */}
