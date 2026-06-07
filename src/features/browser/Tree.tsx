@@ -60,15 +60,22 @@ function DirNode({ entry, depth }: { entry: Entry; depth: number }) {
 }
 
 function FileNode({ entry, depth }: { entry: Entry; depth: number }) {
-  const selected = useAppStore((s) => s.selected);
-  const select = useAppStore((s) => s.select);
-  const isSelected = selected?.path === entry.path;
+  const activeTabId = useAppStore((s) => s.activeTabId);
+  const openTab = useAppStore((s) => s.openTab);
+  const tabId = `file:${entry.path.toLowerCase()}`;
 
   return (
     <button
-      className={`tree-row${isSelected ? " selected" : ""}`}
+      className={`tree-row${activeTabId === tabId ? " selected" : ""}`}
       style={{ paddingLeft: depth * 16 + 8 }}
-      onClick={() => select(entry)}
+      onClick={() =>
+        openTab({
+          id: tabId,
+          title: entry.name,
+          anm2Path: entry.kind === "anm2" ? entry.path : null,
+          sheetPath: entry.kind === "png" ? entry.path : null,
+        })
+      }
     >
       {entry.kind === "png" ? (
         <Thumb path={entry.path} />

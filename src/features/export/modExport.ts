@@ -2,6 +2,7 @@
 // modsPath/<mod>/resources/gfx/... and generate metadata.xml on first save.
 // Pure helpers up top (unit-tested); IO at the bottom via the guarded writer.
 
+import { invalidateOverlay } from "../../lib/fsx/modOverlay";
 import {
   modPathExists,
   writeModFile,
@@ -104,6 +105,9 @@ export async function exportToMod(
     wroteMetadata = true;
   }
 
+  // Future overlay lookups for this rel must hit the just-written file
+  // instead of any cached "miss" from before the save.
+  invalidateOverlay(rel);
   markSheetClean(doc);
   return { pngPath: paths.pngPath, wroteMetadata };
 }

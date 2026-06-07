@@ -9,11 +9,9 @@ import {
   type ResolvedTransform,
 } from "../../lib/anm2/timeline";
 
-/**
- * Spritesheet pixel sources by spritesheet id; null = file missing (raglich
- * case). These are the same canvases the editor mutates (live link).
- */
-export type SheetMap = Map<number, HTMLCanvasElement | null>;
+// SheetMap lives with the shared sheet docs; re-exported for renderer users.
+export type { SheetMap } from "../../lib/sheets/store";
+import type { SheetMap } from "../../lib/sheets/store";
 
 const IDENTITY: ResolvedTransform = {
   x: 0, y: 0, xScale: 100, yScale: 100, rotation: 0,
