@@ -22,7 +22,8 @@ The aesthetic target is **a professional Adobe Photoshop-style desktop tool, ded
 
 - Dark muted palette (current vars), thin 1px borders, dense panels, **no emoji buttons** anywhere.
 - Icon-first tool/category rails (16px stroke SVGs in `app/icons.tsx`); keyboard shortcuts surfaced in tooltips, not labels.
-- Avoid bright "web app" affordances: solid green/blue chip badges, gradient buttons, rounded pill labels, decorative shadows. State indicators should be subtle (a 6–8px dot, a 1px accent border, dim caps text) — not chips with colored backgrounds.
+- Avoid bright "web app" affordances: solid green/blue chip badges, gradient buttons, rounded pill labels, decorative shadows.
+- **No animated or pulsing state indicators** — no flickering dots, no pulsing borders, no scrolling marquees, no spinner-as-decoration. State that needs to be expressed goes in **plain inline text** ("Live Preview: Azazel"). The only animated indicator allowed is the existing skeleton-pulse on catalog loading shimmer. The tab dirty-dot stays static.
 - Real text labels for real things: "75 Frames" not "75f"; tooltips are full sentences. The product is *for editing*, so the controls (transport, sheets, tools) are the focus; previews are reference, not centerpiece (unless explicitly in live-edit mode).
 - Verify look in-app via screenshots before declaring a UI task done. The user takes screenshots themselves — provide a concrete checklist of what to look at.
 
