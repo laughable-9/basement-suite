@@ -7,6 +7,11 @@ import { useAppStore } from "../../app/store";
 import { listMods, type ModSummary } from "../../lib/mods/listMods";
 import type { ModFile } from "../../lib/mods/fileTree";
 import { deleteModFolder } from "../../lib/mods/deleteMod";
+import { createMod } from "../../lib/mods/createMod";
+import { isWorkshopMod } from "../../lib/mods/metadata";
+import { CopyIcon, PlusIcon, SteamIcon, TrashIcon } from "../../app/icons";
+import { isValidModName } from "../export/modExport";
+import { BBCode } from "./BBCode";
 import { DiffViewer } from "./DiffViewer";
 
 function fmtBytes(n: number): string {
@@ -32,6 +37,7 @@ export function ModsPanel() {
   const [selected, setSelected] = useState<string | null>(null);
   const [openFile, setOpenFile] = useState<ModFile | null>(null);
   const [pendingDelete, setPendingDelete] = useState<ModSummary | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
 
   const refresh = () => {
     if (!paths) return;
@@ -70,6 +76,13 @@ export function ModsPanel() {
       <aside className="mods-list">
         <header className="panel-header">
           Mods <span className="panel-count">{mods.length}</span>
+          <button
+            className="rail-btn mods-new-btn"
+            title="Create a new local mod"
+            onClick={() => setNewOpen(true)}
+          >
+            <PlusIcon />
+          </button>
         </header>
         <div className="panel-body">
           {loading && <div className="detail-empty">Scanning mods…</div>}
@@ -77,6 +90,7 @@ export function ModsPanel() {
           {!loading &&
             mods.map((m) => {
               const isActive = activeMod === m.folderName;
+              const workshop = isWorkshopMod(m.metadata);
               return (
                 <button
                   key={m.folderName}
@@ -87,7 +101,15 @@ export function ModsPanel() {
                   title={m.path}
                 >
                   <span className="mod-row-name">
-                    {m.displayName}
+                    {workshop && (
+                      <span
+                        className="mod-workshop-icon"
+                        title={`Steam Workshop mod (id ${m.metadata.id})`}
+                      >
+                        <SteamIcon />
+                      </span>
+                    )}
+                    <span className="mod-row-name-text">{m.displayName}</span>
                     {isActive && <span className="mod-active-badge">active</span>}
                   </span>
                   <span className="mod-row-meta">
@@ -109,7 +131,12 @@ export function ModsPanel() {
             <FileTree
               files={current.files}
               selected={openFile?.rel ?? null}
-              onSelect={setOpenFile}
+              // Re-clicking the open file closes the diff viewer (and
+              // re-expands the description). Standard "click-to-toggle"
+              // for selection of this style.
+              onSelect={(f) =>
+                setOpenFile((cur) => (cur?.rel === f.rel ? null : f))
+              }
             />
           </aside>
           <section className="mods-detail">
@@ -137,6 +164,19 @@ export function ModsPanel() {
           <EmptyDetail />
         </section>
       )}
+      {newOpen && paths && (
+        <NewModModal
+          modsPath={paths.modsPath}
+          existing={mods.map((m) => m.folderName.toLowerCase())}
+          onClose={() => setNewOpen(false)}
+          onCreated={(folderName) => {
+            setNewOpen(false);
+            addToast(`Created mod "${folderName}"`, "success");
+            refresh();
+            setSelected(folderName);
+          }}
+        />
+      )}
       {pendingDelete && paths && (
         <DeleteConfirmModal
           mod={pendingDelete}
@@ -158,6 +198,106 @@ export function ModsPanel() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function NewModModal({
+  modsPath,
+  existing,
+  onClose,
+  onCreated,
+}: {
+  modsPath: string;
+  existing: string[];
+  onClose: () => void;
+  onCreated: (folderName: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const trimmed = name.trim();
+  const valid = isValidModName(name);
+  const duplicate =
+    valid && existing.includes(trimmed.toLowerCase());
+
+  async function submit() {
+    if (!valid || duplicate || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await createMod(modsPath, trimmed, description);
+      onCreated(trimmed);
+    } catch (e) {
+      setError(String(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <h2>New mod</h2>
+        <label className="modal-field">
+          Folder name
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && valid && !duplicate) submit();
+            }}
+            placeholder="my sprite mod"
+          />
+        </label>
+        {!valid && name.length > 0 && (
+          <p className="detail-error">
+            Folder names can't contain {"< > : \" / \\ | ? *"} or
+            leading/trailing spaces.
+          </p>
+        )}
+        {duplicate && (
+          <p className="detail-error">
+            A mod folder named "{trimmed}" already exists.
+          </p>
+        )}
+        <label className="modal-field">
+          Description (optional)
+          <input
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Recolors for ghost.png"
+          />
+        </label>
+        <p className="modal-note">
+          Creates <code>{modsPath}/{trimmed || "<name>"}</code> with a
+          starter <code>metadata.xml</code>. Save sprites into it from the
+          editor's Ctrl+S dialog or mark it active to start overlaying.
+        </p>
+        {error && <p className="detail-error">{error}</p>}
+        <div className="modal-actions">
+          <button className="modal-btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className="modal-btn primary"
+            disabled={!valid || duplicate || busy}
+            onClick={submit}
+          >
+            {busy ? "Creating…" : "Create"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -194,11 +334,11 @@ function DeleteConfirmModal({
           be lost.
         </p>
         <div className="modal-actions">
-          <button className="player-btn modal-btn" onClick={onCancel}>
+          <button className="modal-btn" onClick={onCancel}>
             Cancel
           </button>
           <button
-            className="player-btn modal-btn primary modal-btn-danger"
+            className="modal-btn primary modal-btn-danger"
             onClick={onConfirm}
           >
             Delete forever
@@ -318,35 +458,39 @@ function ModDetail({
             {isActive ? "Active" : "Set as active"}
           </button>
           <button
-            className="edit-link"
+            className="rail-btn mod-detail-action"
             onClick={onCopyPath}
             title="Copy the mod folder path to the clipboard"
           >
-            Copy path
+            <CopyIcon />
           </button>
           <button
-            className="edit-link mod-detail-delete"
+            className="rail-btn mod-detail-action mod-detail-delete"
             onClick={onDelete}
             title="Delete this mod folder permanently"
           >
-            Delete
+            <TrashIcon />
           </button>
         </div>
         <div className="mod-detail-meta">
           {mod.folderName}
           {mod.metadata.version ? ` · v${mod.metadata.version}` : ""}
         </div>
-        {mod.metadata.description && (
-          <p className="mod-detail-desc">{mod.metadata.description}</p>
-        )}
       </header>
+      {mod.metadata.description && (
+        <div
+          className={`mod-detail-desc${openFile ? " compact" : " expanded"}`}
+        >
+          <BBCode text={mod.metadata.description} />
+        </div>
+      )}
       {openFile ? (
         <DiffViewer file={openFile} gfxRoot={gfxRoot} />
-      ) : (
+      ) : !mod.metadata.description ? (
         <div className="detail-empty">
           Pick a file on the left to compare it with vanilla.
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
