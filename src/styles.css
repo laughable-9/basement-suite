@@ -517,6 +517,124 @@ body {
   padding: 4px 0;
 }
 
+/* ============ mods panel ============ */
+
+.mods-panel {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+
+.mods-list {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-raised);
+  border-right: 1px solid var(--border);
+  min-height: 0;
+}
+
+.mods-detail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.mod-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-left: 2px solid transparent;
+  color: var(--text);
+  font: inherit;
+  padding: 8px 14px;
+  cursor: pointer;
+}
+
+.mod-row:hover {
+  background: var(--bg-hover);
+}
+
+.mod-row.selected {
+  background: var(--bg-hover);
+  border-left-color: var(--accent);
+}
+
+.mod-row-name {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mod-row-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mod-detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.mod-detail-header {
+  padding: 16px 20px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.mod-detail-header h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.mod-detail-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.mod-detail-desc {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.mods-firstrun {
+  padding: 20px 18px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.mods-firstrun h3 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.mods-firstrun p {
+  margin: 0 0 10px;
+}
+
+.mods-firstrun code {
+  background: var(--bg);
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 12px;
+}
+
 .tree-list {
   list-style: none;
   margin: 0;

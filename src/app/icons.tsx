@@ -186,6 +186,19 @@ export const GearIcon = () =>
 export const FolderIcon = () =>
   svg(<path d="M2 4 C2 3.4 2.4 3 3 3 H6 L7.5 4.8 H13 C13.6 4.8 14 5.2 14 5.8 V12 C14 12.6 13.6 13 13 13 H3 C2.4 13 2 12.6 2 12 Z" />);
 
+/** Folder with a small gear in the corner — used for the Mods tab. */
+export const FolderGearIcon = () =>
+  svg(
+    <>
+      <path d="M2 4 C2 3.4 2.4 3 3 3 H6 L7.5 4.8 H13 C13.6 4.8 14 5.2 14 5.8 V12 C14 12.6 13.6 13 13 13 H3 C2.4 13 2 12.6 2 12 Z" />
+      <circle cx="11.3" cy="10.3" r="1.3" fill="var(--bg-raised)" />
+      <path
+        d="M11.3 8.4 V9.2 M11.3 11.4 V12.2 M9.4 10.3 H10.2 M12.4 10.3 H13.2 M9.95 8.95 L10.5 9.5 M12.1 11.1 L12.65 11.65 M12.65 8.95 L12.1 9.5 M10.5 11.1 L9.95 11.65"
+        strokeWidth="0.9"
+      />
+    </>,
+  );
+
 export const PaletteIcon = () =>
   svg(
     <>

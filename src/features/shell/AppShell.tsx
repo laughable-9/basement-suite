@@ -11,6 +11,7 @@ import {
   CloseIcon,
   DropIcon,
   FilmIcon,
+  FolderGearIcon,
   FolderIcon,
   GearIcon,
   GridIcon,
@@ -26,6 +27,7 @@ import {
 } from "../../app/icons";
 import { CATEGORY_LABELS } from "../../lib/catalog/types";
 import { Home } from "../home/Home";
+import { ModsPanel } from "../mods/ModsPanel";
 import { WorkTabView } from "../work/WorkTabView";
 import { SettingsPopover } from "./SettingsPopover";
 
@@ -98,7 +100,7 @@ export function AppShell() {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "Tab") {
         e.preventDefault();
-        const ids = ["home", ...tabs.map((t) => t.id)];
+        const ids = ["home", "mods", ...tabs.map((t) => t.id)];
         const i = ids.indexOf(activeTabId);
         const next = e.shiftKey
           ? ids[(i - 1 + ids.length) % ids.length]
@@ -130,6 +132,13 @@ export function AppShell() {
             title="Home — browse everything"
           >
             <HomeIcon />
+          </button>
+          <button
+            className={`doc-tab${activeTabId === "mods" ? " active" : ""}`}
+            onClick={() => setActiveTab("mods")}
+            title="Mods — manage your installed mods"
+          >
+            <FolderGearIcon />
           </button>
           {tabs.map((t) => (
             <span
@@ -197,6 +206,9 @@ export function AppShell() {
           {/* All tabs stay mounted so editor/player state survives switches */}
           <div className="tab-host" hidden={activeTabId !== "home"}>
             <Home />
+          </div>
+          <div className="tab-host" hidden={activeTabId !== "mods"}>
+            <ModsPanel />
           </div>
           {tabs.map((t) => (
             <div key={t.id} className="tab-host" hidden={t.id !== activeTabId}>
