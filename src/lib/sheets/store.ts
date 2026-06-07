@@ -1,6 +1,13 @@
-// In-memory editable spritesheet documents. The editor mutates doc.canvas;
-// subscribers (the player, in M3's live link) re-read it on version bumps.
-// Nothing here touches disk after load — saving is M3's mod export.
+// In-memory editable spritesheet documents. Now multi-layer:
+//
+//   doc.layers      = list of SheetLayer (bottom-to-top render order)
+//   doc.canvas      = composite — what the player/thumbs/diff/save all read
+//   doc.activeLayerId = which layer receives strokes
+//
+// Drawing tools target the active layer via `activeLayer(doc).ctx`. After any
+// layer change (visibility, opacity, pixels, reorder, add/delete) callers
+// run `composite(doc)` so the public `doc.canvas` stays in sync, then
+// `bumpSheet(doc)` so subscribers (player live link, sheet thumb) repaint.
 
 import { readFile } from "@tauri-apps/plugin-fs";
 import type { Anm2 } from "../anm2/types";
@@ -11,10 +18,35 @@ import { registerSheetPath } from "./dirty";
 /** Spritesheet pixel sources by spritesheet id; null = file missing. */
 export type SheetMap = Map<number, HTMLCanvasElement | null>;
 
-export interface SheetDoc {
-  path: string;
+export interface SheetLayer {
+  id: number;
+  name: string;
+  visible: boolean;
+  /** 0..1 */
+  opacity: number;
+  /** Locked layers reject paint, transform, clear, and delete. */
+  locked: boolean;
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
+}
+
+/** Selection lives on the doc so undo/redo can flip it through history. */
+export interface SelectionState {
+  bounds: { x: number; y: number; w: number; h: number };
+  /** Optional doc-sized binary alpha mask; null = the bounds rect itself. */
+  mask: HTMLCanvasElement | null;
+}
+
+export interface SheetDoc {
+  path: string;
+  /** Composite of all visible layers — read by player/thumb/diff/save. */
+  canvas: HTMLCanvasElement;
+  /** Composite context. For reads (palette, eyedropper). Drawing tools must
+   *  target the active layer instead via `activeLayer(doc).ctx`. */
+  ctx: CanvasRenderingContext2D;
+  layers: SheetLayer[];
+  activeLayerId: number;
+  selection: SelectionState | null;
   version: number;
   dirty: boolean;
 }
@@ -35,17 +67,73 @@ async function decode(path: string): Promise<HTMLCanvasElement> {
   return canvas;
 }
 
+function mkCanvas(w: number, h: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  return c;
+}
+
+/** Redraw `doc.canvas` from all visible layers bottom-to-top. */
+export function composite(doc: SheetDoc): void {
+  const ctx = doc.ctx;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = 1;
+  ctx.clearRect(0, 0, doc.canvas.width, doc.canvas.height);
+  for (const layer of doc.layers) {
+    if (!layer.visible || layer.opacity <= 0) continue;
+    ctx.globalAlpha = layer.opacity;
+    ctx.drawImage(layer.canvas, 0, 0);
+  }
+  ctx.restore();
+}
+
+/** Mid-drag selection updates that shouldn't be in history. The recorded
+ *  commit goes through `recordSelection` in history.ts. */
+export function previewSelection(
+  doc: SheetDoc,
+  sel: SelectionState | null,
+): void {
+  doc.selection = sel;
+  listeners.get(doc.path)?.forEach((cb) => cb());
+}
+
+export function activeLayer(doc: SheetDoc): SheetLayer {
+  // Active layer is guaranteed to exist (we never let the list go empty).
+  return (
+    doc.layers.find((l) => l.id === doc.activeLayerId) ?? doc.layers[0]
+  );
+}
+
 export async function getSheetDoc(path: string): Promise<SheetDoc> {
   const existing = docs.get(path);
   if (existing) return existing;
-  const canvas = await decode(path);
+  const decoded = await decode(path);
+
+  // Single background layer holds the original pixels.
+  const bgLayer: SheetLayer = {
+    id: 1,
+    name: "Background",
+    visible: true,
+    opacity: 1,
+    locked: false,
+    canvas: decoded,
+    ctx: decoded.getContext("2d", { willReadFrequently: true })!,
+  };
+  const compositeCanvas = mkCanvas(decoded.width, decoded.height);
   const doc: SheetDoc = {
     path,
-    canvas,
-    ctx: canvas.getContext("2d", { willReadFrequently: true })!,
+    canvas: compositeCanvas,
+    ctx: compositeCanvas.getContext("2d", { willReadFrequently: true })!,
+    layers: [bgLayer],
+    activeLayerId: bgLayer.id,
+    selection: null,
     version: 0,
     dirty: false,
   };
+  composite(doc);
   docs.set(path, doc);
   registerSheetPath(path);
   return doc;
@@ -56,12 +144,6 @@ export function peekSheetDoc(path: string): SheetDoc | undefined {
   return docs.get(path);
 }
 
-/**
- * Drop every cached SheetDoc — used when the active mod changes, because
- * file resolution moves to a different absolute path and previously-cached
- * vanilla docs would otherwise mask the modded ones. Any in-memory edits
- * on dropped docs are lost: callers must check dirty state first.
- */
 export function clearAllSheets(): void {
   docs.clear();
   for (const set of listeners.values()) {
@@ -81,6 +163,104 @@ export function markSheetClean(doc: SheetDoc): void {
   doc.dirty = false;
   listeners.get(doc.path)?.forEach((cb) => cb());
 }
+
+/* ---------- layer mutations ---------- */
+
+function nextLayerId(doc: SheetDoc): number {
+  return Math.max(0, ...doc.layers.map((l) => l.id)) + 1;
+}
+
+/** Add a transparent layer above the active one and make it active. */
+export function addLayer(doc: SheetDoc, name?: string): SheetLayer {
+  const id = nextLayerId(doc);
+  const c = mkCanvas(doc.canvas.width, doc.canvas.height);
+  const layer: SheetLayer = {
+    id,
+    name: name ?? `Layer ${doc.layers.length + 1}`,
+    visible: true,
+    opacity: 1,
+    locked: false,
+    canvas: c,
+    ctx: c.getContext("2d", { willReadFrequently: true })!,
+  };
+  // Insert just above the current active layer so the new pixels paint
+  // on top of what the user was looking at.
+  const idx = doc.layers.findIndex((l) => l.id === doc.activeLayerId);
+  doc.layers.splice(idx + 1, 0, layer);
+  doc.activeLayerId = id;
+  composite(doc);
+  bumpSheet(doc);
+  return layer;
+}
+
+/** Remove a layer. Never empties the doc — the last layer can't be deleted. */
+export function removeLayer(doc: SheetDoc, id: number): void {
+  if (doc.layers.length <= 1) return;
+  const idx = doc.layers.findIndex((l) => l.id === id);
+  if (idx === -1) return;
+  doc.layers.splice(idx, 1);
+  if (doc.activeLayerId === id) {
+    doc.activeLayerId =
+      doc.layers[Math.min(idx, doc.layers.length - 1)].id;
+  }
+  composite(doc);
+  bumpSheet(doc);
+}
+
+export function setActiveLayer(doc: SheetDoc, id: number): void {
+  if (!doc.layers.some((l) => l.id === id)) return;
+  doc.activeLayerId = id;
+  // No composite or bump — selection alone doesn't change pixels, but
+  // subscribers may want to know (panel re-render).
+  listeners.get(doc.path)?.forEach((cb) => cb());
+}
+
+export function setLayerVisible(
+  doc: SheetDoc,
+  id: number,
+  visible: boolean,
+): void {
+  const layer = doc.layers.find((l) => l.id === id);
+  if (!layer || layer.visible === visible) return;
+  layer.visible = visible;
+  composite(doc);
+  bumpSheet(doc);
+}
+
+export function setLayerOpacity(
+  doc: SheetDoc,
+  id: number,
+  opacity: number,
+): void {
+  const layer = doc.layers.find((l) => l.id === id);
+  if (!layer) return;
+  const clamped = Math.max(0, Math.min(1, opacity));
+  if (layer.opacity === clamped) return;
+  layer.opacity = clamped;
+  composite(doc);
+  bumpSheet(doc);
+}
+
+export function setLayerName(doc: SheetDoc, id: number, name: string): void {
+  const layer = doc.layers.find((l) => l.id === id);
+  if (!layer) return;
+  layer.name = name;
+  listeners.get(doc.path)?.forEach((cb) => cb());
+}
+
+/** Shift a layer up (toward top of stack) or down by `delta` slots. */
+export function moveLayer(doc: SheetDoc, id: number, delta: number): void {
+  const idx = doc.layers.findIndex((l) => l.id === id);
+  if (idx === -1) return;
+  const newIdx = Math.max(0, Math.min(doc.layers.length - 1, idx + delta));
+  if (newIdx === idx) return;
+  const [layer] = doc.layers.splice(idx, 1);
+  doc.layers.splice(newIdx, 0, layer);
+  composite(doc);
+  bumpSheet(doc);
+}
+
+/* ---------- loaders unchanged ---------- */
 
 export interface LoadedAnm2Sheets {
   sheets: SheetMap;
