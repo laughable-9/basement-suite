@@ -13,6 +13,13 @@ import { loadAnm2Sheets, subscribeSheet } from "../../lib/sheets/store";
 import { useAppStore } from "../../app/store";
 import { OnionIcon, PauseIcon, PencilIcon, PlayIcon } from "../../app/icons";
 import { renderFrame, type SheetMap } from "./render";
+import { AnimGrid } from "./AnimGrid";
+import type { ThumbScene } from "../home/renderThumb";
+
+const ZOOMS = [1, 2, 3, 4, 6, 8, 12, 16];
+/** Breathing room around the sprite in fit mode (px per side) */
+const FIT_PAD = 24;
+const FIT_MAX = 24;
 
 interface Loaded {
   anm2: Anm2;
@@ -65,10 +72,43 @@ async function load(
   };
 }
 
-const ZOOMS = [1, 2, 3, 4, 6, 8, 12, 16];
-/** Breathing room around the sprite in fit mode (px per side) */
-const FIT_PAD = 56;
-const FIT_MAX = 24;
+/**
+ * Convert the player's Loaded state into a ThumbScene the AnimGrid can derive
+ * per-animation scenes from. base.anim/base.headAnim are placeholders —
+ * buildAnimScene rebuilds them per card. base.headAnim being non-null is the
+ * "this is a character, pair body+head" flag.
+ */
+function loadedToBaseScene(
+  loaded: Loaded,
+  isCharacter: boolean,
+): ThumbScene | null {
+  const def =
+    loaded.anm2.animations.find(
+      (a) => a.name === loaded.anm2.defaultAnimation,
+    ) ?? loaded.anm2.animations[0];
+  if (!def) return null;
+  const headAnim = isCharacter ? headAnimFor(loaded.anm2, def) : null;
+  const sheetPaths = [
+    ...loaded.sheetPaths.values(),
+    ...(loaded.costume ? [...loaded.costume.byId.values()] : []),
+  ];
+  return {
+    anm2: loaded.anm2,
+    anim: def,
+    headAnim,
+    costume: loaded.costume
+      ? {
+          anm2: loaded.costume.anm2,
+          sheets: loaded.costume.sheets,
+          bodyAnim: null,
+          headAnim: null,
+        }
+      : null,
+    sheets: loaded.sheets,
+    fps: loaded.anm2.info.fps,
+    sheetPaths,
+  };
+}
 
 export function Player({
   path,
@@ -80,15 +120,10 @@ export function Player({
   compact = false,
 }: {
   path: string;
-  /** Character skin override (replaces spritesheet 0 + composites the head) */
   skinPath?: string;
-  /** Character costume anm2 (hair/wings), composited by state name */
   costumePath?: string;
-  /** Owning tab — jump requests from the editor are scoped to it */
   tabId?: string;
-  /** Hidden tabs stay mounted but pause their playback clock */
   active?: boolean;
-  /** Display name in the pane header (entity name) */
   title?: string;
   /** Split-screen mode: vertical layout with a LIVE PREVIEW header */
   compact?: boolean;
@@ -101,12 +136,10 @@ export function Player({
   const [playing, setPlaying] = useState(true);
   const [zoom, setZoom] = useState<number | "fit">("fit");
   const [onion, setOnion] = useState(false);
-  const [tick, setTick] = useState(0); // continuous playhead, in ticks
-  // Bumped when the editor mutates a sheet, to repaint while paused.
+  const [tick, setTick] = useState(0);
   const [sheetRev, setSheetRev] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  // Stage tracks its container so the preview always fills the pane.
   const [stage, setStage] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
@@ -120,8 +153,7 @@ export function Player({
     return () => ro.disconnect();
   }, [loaded]);
 
-  // Live link: repaint when any of this anm2's sheets is edited —
-  // including costume overlay sheets.
+  // Live link: repaint when any of this anm2's sheets is edited.
   useEffect(() => {
     if (!loaded) return;
     const paths = [
@@ -161,15 +193,10 @@ export function Player({
     (a) => a.name === animName,
   );
 
-  // Character context: the engine composites body + head animations; do the
-  // same for Walk* so characters aren't headless (SCAN quirk: HeadDown is a
-  // separate 4-frame animation, not a layer of WalkDown).
   const headAnim: Anm2Animation | null =
     skinPath && anim && loaded ? headAnimFor(loaded.anm2, anim) : null;
 
   // Editor crop-grid click → jump to that animation/frame, paused.
-  // Each jump seq is consumed once so a stale jump in the store can't re-fire
-  // when a different anm2 finishes loading.
   const consumedJumpRef = useRef(0);
   useEffect(() => {
     if (!playerJump || !loaded) return;
@@ -185,8 +212,7 @@ export function Player({
 
   const playbackSpeed = useAppStore((s) => s.playbackSpeed);
 
-  // Whole-timeline bounding box (sampled) so fit zoom and centering are
-  // stable across playback instead of jittering frame to frame.
+  // Whole-timeline bounds → stable fit zoom + centering across playback.
   const bounds: Bounds | null = useMemo(() => {
     if (!anim) return null;
     let b: Bounds | null = null;
@@ -201,8 +227,7 @@ export function Player({
     return b;
   }, [anim, headAnim]);
 
-  // Playback clock: advance the playhead by elapsed wall time × fps × speed.
-  // Paused while the owning tab is hidden (stays mounted for state).
+  // Playback clock
   useEffect(() => {
     if (!active || !playing || !loaded || !anim || anim.frameNum <= 0) return;
     let raf = 0;
@@ -225,7 +250,7 @@ export function Player({
     return () => cancelAnimationFrame(raf);
   }, [active, playing, loaded, anim, playbackSpeed]);
 
-  // Repaint on every playhead/zoom/animation/stage-size change.
+  // Banner stage repaint
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !loaded || stage.w === 0 || stage.h === 0) return;
@@ -238,9 +263,6 @@ export function Player({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, stage.w, stage.h);
     ctx.imageSmoothingEnabled = false;
-    // Center the sprite's bounding box in the stage. Fit mode picks the
-    // largest integer zoom that leaves FIT_PAD breathing room (fractional
-    // only when the art is bigger than the stage, e.g. cutscenes).
     let z: number;
     let cx = 0;
     let cy = 0;
@@ -265,7 +287,6 @@ export function Player({
     ctx.scale(z, z);
     if (anim && anim.frameNum > 0) {
       if (onion && anim.frameNum > 1) {
-        // Ghost the neighboring whole frames at low opacity.
         const f = Math.floor(tick);
         const wrap = (t: number) =>
           anim.loop
@@ -280,7 +301,6 @@ export function Player({
           renderFrame(ctx, loaded.anm2, anim, next, loaded.sheets, 0.25);
         }
       }
-      // Engine-ish costume ordering: wings behind the body, hair over the head.
       const costume = loaded.costume;
       const cBody = costume?.anm2.animations.find((a) => a.name === anim.name);
       const cHead =
@@ -306,11 +326,76 @@ export function Player({
     setPlaying(true);
   }, []);
 
+  const baseScene = useMemo(
+    () => (loaded ? loadedToBaseScene(loaded, !!skinPath) : null),
+    [loaded, skinPath],
+  );
+
   if (error) return <div className="detail-error">{error}</div>;
   if (!loaded) return <div className="detail-empty">Loading…</div>;
 
   const { anm2, missing } = loaded;
   const frame = Math.floor(tick);
+  const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
+
+  const transport = (
+    <div className="player-transport">
+      <button
+        className="player-btn"
+        onClick={() => {
+          if (!playing && anim && tick >= anim.frameNum - 1e-6) setTick(0);
+          setPlaying(!playing);
+        }}
+        disabled={!anim || anim.frameNum <= 0}
+        title={playing ? "Pause" : "Play"}
+      >
+        {playing ? <PauseIcon /> : <PlayIcon />}
+      </button>
+      <input
+        type="range"
+        min={0}
+        max={Math.max(0, (anim?.frameNum ?? 1) - 1)}
+        step={1}
+        value={Math.min(frame, Math.max(0, (anim?.frameNum ?? 1) - 1))}
+        onChange={(e) => {
+          setPlaying(false);
+          setTick(Number(e.target.value));
+        }}
+      />
+      <span className="player-frame">
+        {anim && anim.frameNum > 0
+          ? `${Math.min(frame + 1, anim.frameNum)}/${anim.frameNum}`
+          : "–"}
+      </span>
+      <span className="transport-sep" />
+      <select
+        className="transport-select"
+        title="Preview zoom"
+        value={zoom === "fit" ? "fit" : String(zoom)}
+        onChange={(e) =>
+          setZoom(e.target.value === "fit" ? "fit" : Number(e.target.value))
+        }
+      >
+        <option value="fit">Fit</option>
+        {ZOOMS.map((z) => (
+          <option key={z} value={String(z)}>
+            {z}×
+          </option>
+        ))}
+      </select>
+      <button
+        className={`rail-btn${onion ? " active" : ""}`}
+        title="Onion skin — ghost the previous/next frame"
+        onClick={() => setOnion(!onion)}
+      >
+        <OnionIcon />
+      </button>
+      <span className="transport-sep" />
+      <span className="player-fps" title="Animation file frame rate">
+        {anm2.info.fps} fps
+      </span>
+    </div>
+  );
 
   const sheetRow = (
     id: number,
@@ -345,166 +430,144 @@ export function Player({
     </div>
   );
 
-  const baseName = (p: string) => p.split(/[\\/]/).pop() ?? p;
+  const sheetsPanel = (
+    <aside className="player-sheets">
+      <header className="panel-header">Sheets</header>
+      <div className="panel-body">
+        {anm2.content.spritesheets.map((s) => {
+          const resolved = loaded.sheetPaths.get(s.id);
+          const ok = !!loaded.sheets.get(s.id);
+          return sheetRow(s.id, baseName(resolved ?? s.rawPath), resolved, ok, path);
+        })}
+        {loaded.costume && (
+          <>
+            <div className="sheet-group-label">
+              Costume (hair / wings / head overlays)
+            </div>
+            {loaded.costume.anm2.content.spritesheets.map((s) => {
+              const resolved = loaded.costume!.byId.get(s.id);
+              const ok = !!loaded.costume!.sheets.get(s.id);
+              return sheetRow(
+                s.id,
+                baseName(resolved ?? s.rawPath),
+                resolved,
+                ok,
+                loaded.costume!.path,
+              );
+            })}
+          </>
+        )}
+      </div>
+    </aside>
+  );
 
-  return (
-    <div className={`player ${compact ? "player-stack" : "player-wide"}`}>
-      <div className="player-stage-col">
-        <div className="player-header">
-          {compact && (
-            <span className="live-badge" title="Mirrors your edits in real time">
-              LIVE PREVIEW
-            </span>
+  // Banner: preview stage + transport row + animation info.
+  // Header (entity name + live badge in compact) is rendered above the banner.
+  const banner = (
+    <div className="player-banner">
+      <div className="player-stage checkerboard" ref={stageRef}>
+        <canvas ref={canvasRef} />
+        {missing.length > 0 && (
+          <div className="player-warning">
+            Missing: {missing.join(", ")}
+          </div>
+        )}
+      </div>
+      <div className="player-banner-info">
+        <div className="player-banner-title">
+          <span className="player-anim-name">{animName || "–"}</span>
+          {animName === anm2.defaultAnimation && (
+            <span className="default-badge">default</span>
           )}
+        </div>
+        <div className="player-banner-meta">
+          {anim
+            ? `${anim.frameNum} frame${anim.frameNum === 1 ? "" : "s"}${anim.loop ? " · loops" : ""}`
+            : ""}
+        </div>
+        {transport}
+      </div>
+    </div>
+  );
+
+  // Compact (live edit) mode: vertical with big preview on top.
+  // Animation switcher stays as a compact text list to keep the live edit
+  // pane focused on watching the preview.
+  if (compact) {
+    return (
+      <div className="player player-stack">
+        <div className="player-header">
+          <span className="live-badge" title="Mirrors your edits in real time">
+            LIVE PREVIEW
+          </span>
+          {title && <span className="player-title">{title}</span>}
+        </div>
+        {banner}
+        <div className="player-stack-panels">
+          <section className="player-anims-list">
+            <header className="panel-header">
+              Animations <span className="panel-count">{anm2.animations.length}</span>
+            </header>
+            <div className="panel-body">
+              <table className="anim-table">
+                <tbody>
+                  {anm2.animations.map((a, i) => (
+                    <tr
+                      key={`${a.name}-${i}`}
+                      className={
+                        a.name === animName ? "anim-row-active" : "anim-row"
+                      }
+                      onClick={() => selectAnim(a.name)}
+                    >
+                      <td>
+                        {a.name}
+                        {a.name === anm2.defaultAnimation && (
+                          <span className="default-badge">default</span>
+                        )}
+                      </td>
+                      <td className="anim-col-num">{a.frameNum}</td>
+                      <td className="anim-col-num">{a.loop ? "↻" : ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          {sheetsPanel}
+        </div>
+      </div>
+    );
+  }
+
+  // Normal mode: banner top + animation card grid below, sheets docked right.
+  return (
+    <div className="player player-wide">
+      <div className="player-main">
+        <div className="player-header">
           {title && <span className="player-title">{title}</span>}
           <span className="toolbar-spacer" />
           <span className="player-meta">
             {anm2.animations.length} animations
           </span>
         </div>
-        {missing.length > 0 && (
-          <div className="player-warning">
-            Missing spritesheet{missing.length > 1 ? "s" : ""}:{" "}
-            {missing.join(", ")} (rendered as magenta)
-          </div>
-        )}
-        <div className="player-stage checkerboard" ref={stageRef}>
-          <canvas ref={canvasRef} />
-        </div>
-        <div className="player-transport">
-          <button
-            className="player-btn"
-            onClick={() => {
-              if (!playing && anim && tick >= anim.frameNum - 1e-6) setTick(0);
-              setPlaying(!playing);
-            }}
-            disabled={!anim || anim.frameNum <= 0}
-            title={playing ? "Pause" : "Play"}
-          >
-            {playing ? <PauseIcon /> : <PlayIcon />}
-          </button>
-          <input
-            type="range"
-            min={0}
-            max={Math.max(0, (anim?.frameNum ?? 1) - 1)}
-            step={1}
-            value={Math.min(frame, Math.max(0, (anim?.frameNum ?? 1) - 1))}
-            onChange={(e) => {
-              setPlaying(false);
-              setTick(Number(e.target.value));
-            }}
+        {banner}
+        <header className="anim-grid-header">
+          <span>ANIMATIONS</span>
+          <span className="panel-count">{anm2.animations.length}</span>
+        </header>
+        {baseScene ? (
+          <AnimGrid
+            baseScene={baseScene}
+            animations={anm2.animations}
+            selectedName={animName}
+            defaultName={anm2.defaultAnimation}
+            onSelect={selectAnim}
           />
-          <span className="player-frame">
-            {anim && anim.frameNum > 0
-              ? `${Math.min(frame + 1, anim.frameNum)}/${anim.frameNum}`
-              : "–"}
-          </span>
-          <span className="transport-sep" />
-          <select
-            className="transport-select"
-            title="Preview zoom"
-            value={zoom === "fit" ? "fit" : String(zoom)}
-            onChange={(e) =>
-              setZoom(
-                e.target.value === "fit" ? "fit" : Number(e.target.value),
-              )
-            }
-          >
-            <option value="fit">Fit</option>
-            {ZOOMS.map((z) => (
-              <option key={z} value={String(z)}>
-                {z}×
-              </option>
-            ))}
-          </select>
-          <button
-            className={`rail-btn${onion ? " active" : ""}`}
-            title="Onion skin — ghost the previous/next frame"
-            onClick={() => setOnion(!onion)}
-          >
-            <OnionIcon />
-          </button>
-          <span className="transport-sep" />
-          <span className="player-fps" title="Animation file frame rate">
-            {anm2.info.fps} fps
-          </span>
-        </div>
+        ) : (
+          <div className="detail-empty">No animations</div>
+        )}
       </div>
-      <aside className="player-panels">
-        <section className="panel panel-anims">
-          <header className="panel-header">
-            Animations
-            <span className="panel-count">{anm2.animations.length}</span>
-          </header>
-          <div className="panel-body">
-            <table className="anim-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th className="anim-col-num">Frames</th>
-                  <th className="anim-col-num" title="Loops">
-                    ↻
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {anm2.animations.map((a, i) => (
-                  <tr
-                    key={`${a.name}-${i}`}
-                    className={
-                      a.name === animName ? "anim-row-active" : "anim-row"
-                    }
-                    onClick={() => selectAnim(a.name)}
-                  >
-                    <td>
-                      {a.name}
-                      {a.name === anm2.defaultAnimation && (
-                        <span className="default-badge">default</span>
-                      )}
-                    </td>
-                    <td className="anim-col-num">{a.frameNum}</td>
-                    <td className="anim-col-num">{a.loop ? "↻" : ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-        <section className="panel panel-sheets">
-          <header className="panel-header">Sheets</header>
-          <div className="panel-body">
-            {anm2.content.spritesheets.map((s) => {
-              const resolved = loaded.sheetPaths.get(s.id);
-              const ok = !!loaded.sheets.get(s.id);
-              return sheetRow(
-                s.id,
-                baseName(resolved ?? s.rawPath),
-                resolved,
-                ok,
-                path,
-              );
-            })}
-            {loaded.costume && (
-              <>
-                <div className="sheet-group-label">
-                  Costume (hair / wings / head overlays)
-                </div>
-                {loaded.costume.anm2.content.spritesheets.map((s) => {
-                  const resolved = loaded.costume!.byId.get(s.id);
-                  const ok = !!loaded.costume!.sheets.get(s.id);
-                  return sheetRow(
-                    s.id,
-                    baseName(resolved ?? s.rawPath),
-                    resolved,
-                    ok,
-                    loaded.costume!.path,
-                  );
-                })}
-              </>
-            )}
-          </div>
-        </section>
-      </aside>
+      {sheetsPanel}
     </div>
   );
 }

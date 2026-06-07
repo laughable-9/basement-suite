@@ -108,6 +108,48 @@ export function thumbScene(tab: WorkTab): Promise<ThumbScene | null> {
 }
 
 /**
+ * Derive a scene targeting one specific animation, reusing the base scene's
+ * loaded sheets/costume. Returns null when the anim is empty (FrameNum=0) or
+ * doesn't exist in the anm2.
+ *
+ * Character anms: pairs body with its matching head anim (WalkDown↔HeadDown)
+ * so character cards aren't headless. Costume bodyAnim/headAnim are looked up
+ * by name — for animations the costume doesn't cover (Death etc), both are
+ * null and drawThumb skips them.
+ */
+export function buildAnimScene(
+  base: ThumbScene,
+  animName: string,
+): ThumbScene | null {
+  const anim = base.anm2.animations.find((a) => a.name === animName);
+  if (!anim || anim.frameNum <= 0) return null;
+  // Only character scenes (skin override = head pair exists) need head pairing.
+  const headAnim = base.headAnim ? headAnimFor(base.anm2, anim) : null;
+  const costume = base.costume
+    ? {
+        anm2: base.costume.anm2,
+        sheets: base.costume.sheets,
+        bodyAnim:
+          base.costume.anm2.animations.find((a) => a.name === anim.name) ??
+          null,
+        headAnim: headAnim
+          ? base.costume.anm2.animations.find((a) => a.name === headAnim.name) ??
+            null
+          : null,
+      }
+    : null;
+  return {
+    anm2: base.anm2,
+    anim,
+    headAnim,
+    costume,
+    sheets: base.sheets,
+    fps: base.fps,
+    sheetPaths: base.sheetPaths,
+  };
+}
+
+/**
  * Draw the scene at tick t, auto-fit and centered. The camera is locked to
  * `fitTick` (default frame 0) so hover playback doesn't jitter.
  */
