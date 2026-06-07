@@ -21,20 +21,10 @@ jobs:
   build:
     permissions:
       contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: --target aarch64-apple-darwin
-          - platform: macos-latest
-            args: --target x86_64-apple-darwin
-          - platform: ubuntu-22.04
-            args: ""
-          - platform: windows-latest
-            args: ""
-
-    runs-on: ${{ matrix.platform }}
+    # Windows-only for now. Basement Suite is built for Repentance on
+    # Windows; adding macOS / Linux means dealing with code-signing,
+    # apt build deps, and AppImage glue we don't need for v0.1.x.
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -46,24 +36,11 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Cache cargo registry + target
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
-
-      - name: Install Linux build dependencies
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf \
-            libxdo-dev
 
       - name: Install JS dependencies
         run: npm ci
@@ -84,4 +61,3 @@ jobs:
             Replace this body with proper release notes before publishing.
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
