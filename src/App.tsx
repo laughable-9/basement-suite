@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { exists } from "@tauri-apps/plugin-fs";
 import { loadConfig, type ConfigState } from "./lib/fsx/config";
 import { loadCatalog } from "./lib/catalog/load";
 import { AppShell } from "./features/shell/AppShell";
+import { SetupWizard } from "./features/shell/SetupWizard";
 import { ErrorBoundary } from "./app/ErrorBoundary";
 import {
   useAppStore,
@@ -71,7 +72,7 @@ function Toasts() {
 export default function App() {
   const [cfg, setCfg] = useState<ConfigState | null>(null);
 
-  useEffect(() => {
+  const runLoad = useCallback(() => {
     loadConfig().then(
       async (c) => {
         if (c.status === "ok") {
@@ -90,9 +91,14 @@ export default function App() {
         }
         setCfg(c);
       },
-      (err) => setCfg({ status: "error", problems: [String(err)] }),
+      (err) =>
+        setCfg({ status: "error", config: {}, problems: [String(err)] }),
     );
   }, []);
+
+  useEffect(() => {
+    runLoad();
+  }, [runLoad]);
 
   // Persist tabs/home across launches.
   useEffect(() => {
@@ -121,18 +127,17 @@ export default function App() {
     return <div className="screen-center">Loading config…</div>;
   }
 
-  if (cfg.status === "error") {
+  // Missing config OR present-but-broken → step-by-step onboarding wizard.
+  if (cfg.status !== "ok") {
     return (
-      <div className="screen-center">
-        <div className="error-card">
-          <h1>Can't start</h1>
-          <ul>
-            {cfg.problems.map((p) => (
-              <li key={p}>{p}</li>
-            ))}
-          </ul>
-        </div>
-      </div>
+      <ErrorBoundary>
+        <Toasts />
+        <SetupWizard
+          initial={cfg.status === "error" ? cfg.config : undefined}
+          initialProblems={cfg.status === "error" ? cfg.problems : undefined}
+          onSaved={runLoad}
+        />
+      </ErrorBoundary>
     );
   }
 
