@@ -479,6 +479,17 @@ export function Player({
     return [...playerItems, ...costumeItems];
   }, [loaded, baseScene, costumeBaseScene]);
 
+  // Memoed so 75+ FrameStrip thumbnails don't tear down each Player render.
+  // Player anims compose with the costume; costume-exclusive anims render
+  // alone. MUST live above the early returns below — Rules of Hooks.
+  const stripCostume = useMemo(
+    () =>
+      animSource === "player" && loaded?.costume
+        ? { anm2: loaded.costume.anm2, sheets: loaded.costume.sheets }
+        : null,
+    [animSource, loaded?.costume],
+  );
+
   if (error) return <div className="detail-error">{error}</div>;
   if (!loaded) return <div className="detail-empty">Loading…</div>;
 
@@ -680,16 +691,6 @@ export function Player({
         {transport}
       </div>
     </div>
-  );
-
-  // Memoed so 75+ thumbnail effects don't tear down each render. Player
-  // anims compose with the costume; costume-exclusive anims render alone.
-  const stripCostume = useMemo(
-    () =>
-      animSource === "player" && loaded.costume
-        ? { anm2: loaded.costume.anm2, sheets: loaded.costume.sheets }
-        : null,
-    [animSource, loaded.costume],
   );
 
   // Reused in both modes — the strip lives directly below the banner.
