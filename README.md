@@ -88,10 +88,6 @@ If Basement Suite has saved you time on a mod and you'd like to throw a tip in t
 
 [![Support on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/laughable)
 
-<iframe id='kofiframe' src='https://ko-fi.com/laughable/?hidefeed=true&widget=true&embed=true&preview=true' style='border:none;width:100%;padding:4px;background:#f9f9f9;' height='712' title='laughable'></iframe>
-
-*GitHub strips iframes from rendered READMEs for safety — the button above is the working fallback. The iframe is here for any markdown viewer that does allow it (e.g. embedded docs sites).*
-
 ## License
 
 [MIT](LICENSE) — covers the code in this repository only, not any game content it reads.
